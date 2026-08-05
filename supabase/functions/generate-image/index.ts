@@ -12,7 +12,24 @@ function composePrompt(style: string, overallPrompt: string, sceneDescription: s
     .join(', ');
 }
 
+const CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+function jsonResponse(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+  });
+}
+
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   let cutId: string | undefined;
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -21,22 +38,22 @@ Deno.serve(async (req) => {
 
   try {
     ({ cutId } = await req.json());
-    if (!cutId) return new Response(JSON.stringify({ error: 'cutId required' }), { status: 400 });
+    if (!cutId) return jsonResponse({ error: 'cutId required' }, 400);
 
     const { data: cut, error: cutError } = await supabase.from('cuts').select('*').eq('id', cutId).single();
-    if (cutError || !cut) return new Response(JSON.stringify({ error: 'cut not found' }), { status: 404 });
+    if (cutError || !cut) return jsonResponse({ error: 'cut not found' }, 404);
 
     const { data: project, error: projectError } = await supabase
       .from('projects').select('*').eq('id', cut.project_id).single();
-    if (projectError || !project) return new Response(JSON.stringify({ error: 'project not found' }), { status: 404 });
+    if (projectError || !project) return jsonResponse({ error: 'project not found' }, 404);
 
     const authHeader = req.headers.get('Authorization') ?? '';
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (!token) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 });
+    if (!token) return jsonResponse({ error: 'unauthorized' }, 401);
 
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user || userData.user.id !== project.user_id) {
-      return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 });
+      return jsonResponse({ error: 'forbidden' }, 403);
     }
 
     await supabase.from('cuts').update({ generation_status: 'generating' }).eq('id', cutId);
@@ -55,7 +72,7 @@ Deno.serve(async (req) => {
     if (!openaiRes.ok) {
       await supabase.from('cuts').update({ generation_status: 'failed' }).eq('id', cutId);
       const errText = await openaiRes.text();
-      return new Response(JSON.stringify({ error: `openai error: ${errText}` }), { status: 502 });
+      return jsonResponse({ error: `openai error: ${errText}` }, 502);
     }
 
     const openaiJson = await openaiRes.json();
@@ -68,7 +85,7 @@ Deno.serve(async (req) => {
       .upload(path, bytes, { contentType: 'image/png', upsert: true });
     if (uploadError) {
       await supabase.from('cuts').update({ generation_status: 'failed' }).eq('id', cutId);
-      return new Response(JSON.stringify({ error: uploadError.message }), { status: 500 });
+      return jsonResponse({ error: uploadError.message }, 500);
     }
 
     const { data: publicUrlData } = supabase.storage.from('storyboard-images').getPublicUrl(path);
@@ -76,7 +93,7 @@ Deno.serve(async (req) => {
 
     await supabase.from('cuts').update({ image_url: imageUrl, generation_status: 'done' }).eq('id', cutId);
 
-    return new Response(JSON.stringify({ imageUrl }), { status: 200 });
+    return jsonResponse({ imageUrl }, 200);
   } catch (err) {
     if (cutId) {
       try {
@@ -85,6 +102,6 @@ Deno.serve(async (req) => {
         // Swallow cleanup errors — reporting the original error takes priority.
       }
     }
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+    return jsonResponse({ error: String(err) }, 500);
   }
 });
