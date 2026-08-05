@@ -13,14 +13,15 @@ function composePrompt(style: string, overallPrompt: string, sceneDescription: s
 }
 
 Deno.serve(async (req) => {
-  try {
-    const { cutId } = await req.json();
-    if (!cutId) return new Response(JSON.stringify({ error: 'cutId required' }), { status: 400 });
+  let cutId: string | undefined;
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+  try {
+    ({ cutId } = await req.json());
+    if (!cutId) return new Response(JSON.stringify({ error: 'cutId required' }), { status: 400 });
 
     const { data: cut, error: cutError } = await supabase.from('cuts').select('*').eq('id', cutId).single();
     if (cutError || !cut) return new Response(JSON.stringify({ error: 'cut not found' }), { status: 404 });
@@ -28,6 +29,15 @@ Deno.serve(async (req) => {
     const { data: project, error: projectError } = await supabase
       .from('projects').select('*').eq('id', cut.project_id).single();
     if (projectError || !project) return new Response(JSON.stringify({ error: 'project not found' }), { status: 404 });
+
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!token) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 });
+
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !userData?.user || userData.user.id !== project.user_id) {
+      return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 });
+    }
 
     await supabase.from('cuts').update({ generation_status: 'generating' }).eq('id', cutId);
 
@@ -68,6 +78,13 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ imageUrl }), { status: 200 });
   } catch (err) {
+    if (cutId) {
+      try {
+        await supabase.from('cuts').update({ generation_status: 'failed' }).eq('id', cutId);
+      } catch (_cleanupErr) {
+        // Swallow cleanup errors — reporting the original error takes priority.
+      }
+    }
     return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
   }
 });
