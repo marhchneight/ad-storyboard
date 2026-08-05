@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
+import NewProjectPage from './pages/NewProjectPage';
 import { useAuth } from './hooks/useAuth';
 
 function RequireAuth({ children }: { children: ReactElement }) {
@@ -20,7 +21,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<RequireAuth><Placeholder label="projects" /></RequireAuth>} />
-        <Route path="/projects/new" element={<RequireAuth><Placeholder label="new project" /></RequireAuth>} />
+        <Route path="/projects/new" element={<RequireAuth><NewProjectPage /></RequireAuth>} />
         <Route path="/projects/:id" element={<RequireAuth><Placeholder label="editor" /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
