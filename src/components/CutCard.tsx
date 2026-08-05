@@ -56,16 +56,16 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove }: 
           </div>
         )}
         {cut.image_url && (
-          <button type="button" onClick={handleDownload} className="cut-download-btn">다운로드</button>
+          <button type="button" onClick={handleDownload} className="btn-text cut-download-btn">다운로드</button>
         )}
         {cut.generation_status === 'failed' && (
           <p className="error">생성 실패</p>
         )}
         {cut.generation_status !== 'generating' && cut.generation_status !== 'failed' && (
-          <button onClick={handleGenerate}>{cut.image_url ? '다시 생성' : '이미지 생성'}</button>
+          <button className="btn-secondary btn-small" onClick={handleGenerate}>{cut.image_url ? '다시 생성' : '이미지 생성'}</button>
         )}
         {cut.generation_status === 'failed' && (
-          <button onClick={handleGenerate}>다시 시도</button>
+          <button className="btn-secondary btn-small" onClick={handleGenerate}>다시 시도</button>
         )}
       </td>
       <td className="cut-cell">
@@ -81,7 +81,7 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove }: 
           onBlur={() => onUpdate({ camera_direction: cameraDirection })} />
       </td>
       <td className="cut-cell cut-cell-actions">
-        <button type="button" onClick={handleRemove}>삭제</button>
+        <button type="button" className="btn-text" onClick={handleRemove}>삭제</button>
         {error && <p className="error">{error}</p>}
       </td>
     </>

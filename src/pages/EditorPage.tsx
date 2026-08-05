@@ -77,50 +77,59 @@ export default function EditorPage() {
     }
   }
 
-  if (!project) return <div>로딩 중...</div>;
+  if (!project) return <div className="page-shell">로딩 중...</div>;
 
   return (
-    <div className="editor-page">
-      <h1>{project.title}</h1>
-      <button type="button" onClick={handleExportPdf} disabled={exporting}>
-        {exporting ? 'PDF 생성 중...' : 'PDF로 내보내기'}
-      </button>
-      <label>
-        전체 콘셉트 프롬프트
+    <div className="page-shell">
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">Storyboard</p>
+          <h1>{project.title}</h1>
+        </div>
+        <button type="button" className="btn-primary" onClick={handleExportPdf} disabled={exporting}>
+          {exporting ? 'PDF 생성 중...' : 'PDF로 내보내기'}
+        </button>
+      </div>
+
+      <div className="card prompt-card">
+        <span className="field-label">전체 콘셉트 프롬프트</span>
         <textarea value={overallPrompt} onChange={(e) => setOverallPrompt(e.target.value)}
           onBlur={saveOverallPrompt} />
-      </label>
+      </div>
+
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={cuts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-          <table className="cut-table">
-            <thead>
-              <tr>
-                <th></th>
-                <th>순서</th>
-                <th>이미지</th>
-                <th>장면 설명</th>
-                <th>대사/내레이션</th>
-                <th>카메라 지시문</th>
-                <th>관리</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cuts.map((cut, i) => (
-                <SortableCutCard
-                  key={cut.id}
-                  cut={cut}
-                  index={i}
-                  onUpdate={(patch) => updateCut(cut.id, patch)}
-                  onGenerate={() => generateImage(cut.id)}
-                  onRemove={() => removeCut(cut.id)}
-                />
-              ))}
-            </tbody>
-          </table>
+          <div className="cut-table-wrap">
+            <table className="cut-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>순서</th>
+                  <th>이미지</th>
+                  <th>장면 설명</th>
+                  <th>대사/내레이션</th>
+                  <th>카메라 지시문</th>
+                  <th>관리</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cuts.map((cut, i) => (
+                  <SortableCutCard
+                    key={cut.id}
+                    cut={cut}
+                    index={i}
+                    onUpdate={(patch) => updateCut(cut.id, patch)}
+                    onGenerate={() => generateImage(cut.id)}
+                    onRemove={() => removeCut(cut.id)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         </SortableContext>
       </DndContext>
       {error && <p className="error">{error}</p>}
-      <button type="button" onClick={handleAddCut}>컷 추가</button>
+      <button type="button" className="btn-secondary" onClick={handleAddCut}>+ 컷 추가</button>
     </div>
   );
 }
