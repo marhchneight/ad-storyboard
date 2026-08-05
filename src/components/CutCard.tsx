@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Cut } from '../types';
+import { downloadCutImage } from '../lib/pdfExport';
 
 interface Props {
   cut: Cut;
@@ -40,7 +41,14 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove }: 
         <h3>컷 {index + 1}</h3>
         <button type="button" onClick={handleRemove}>삭제</button>
       </div>
-      {cut.image_url && <img src={cut.image_url} alt={`컷 ${index + 1}`} width={256} />}
+      {cut.image_url && (
+        <div>
+          <img src={cut.image_url} alt={`컷 ${index + 1}`} width={256} />
+          <div>
+            <button type="button" onClick={() => downloadCutImage(cut, index)}>이미지 다운로드</button>
+          </div>
+        </div>
+      )}
       {cut.generation_status === 'generating' && <p>이미지 생성 중...</p>}
       {cut.generation_status === 'failed' && (
         <div>

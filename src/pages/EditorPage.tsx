@@ -12,6 +12,7 @@ import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-ki
 import { supabase } from '../lib/supabaseClient';
 import { useCuts } from '../hooks/useCuts';
 import SortableCutCard from '../components/SortableCutCard';
+import { buildStoryboardPdf } from '../lib/pdfExport';
 import type { Project } from '../types';
 
 export default function EditorPage() {
@@ -19,6 +20,7 @@ export default function EditorPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [overallPrompt, setOverallPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const { cuts, updateCut, generateImage, addCut, removeCut, reorderCuts } = useCuts(id!);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -61,11 +63,28 @@ export default function EditorPage() {
     }
   }
 
+  async function handleExportPdf() {
+    if (!project) return;
+    setError(null);
+    setExporting(true);
+    try {
+      const doc = await buildStoryboardPdf(project, cuts);
+      doc.save(`${project.title}.pdf`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   if (!project) return <div>로딩 중...</div>;
 
   return (
     <div className="editor-page">
       <h1>{project.title}</h1>
+      <button type="button" onClick={handleExportPdf} disabled={exporting}>
+        {exporting ? 'PDF 생성 중...' : 'PDF로 내보내기'}
+      </button>
       <label>
         전체 콘셉트 프롬프트
         <textarea value={overallPrompt} onChange={(e) => setOverallPrompt(e.target.value)}
