@@ -45,45 +45,45 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove }: 
   }
 
   return (
-    <div className="cut-card">
-      <div className="cut-card-header">
-        <h3>컷 {index + 1}</h3>
-        <button type="button" onClick={handleRemove}>삭제</button>
-      </div>
-      {cut.image_url && (
-        <div>
-          <img src={cut.image_url} alt={`컷 ${index + 1}`} width={256} />
-          <div>
-            <button type="button" onClick={handleDownload}>이미지 다운로드</button>
+    <>
+      <td className="cut-cell cut-cell-index">{index + 1}</td>
+      <td className="cut-cell cut-cell-image">
+        {cut.image_url ? (
+          <img src={cut.image_url} alt={`컷 ${index + 1}`} className="cut-thumb" />
+        ) : (
+          <div className="cut-thumb cut-thumb-placeholder">
+            {cut.generation_status === 'generating' ? '생성 중...' : '이미지 없음'}
           </div>
-        </div>
-      )}
-      {cut.generation_status === 'generating' && <p>이미지 생성 중...</p>}
-      {cut.generation_status === 'failed' && (
-        <div>
-          <p className="error">이미지 생성에 실패했습니다.</p>
+        )}
+        {cut.image_url && (
+          <button type="button" onClick={handleDownload} className="cut-download-btn">다운로드</button>
+        )}
+        {cut.generation_status === 'failed' && (
+          <p className="error">생성 실패</p>
+        )}
+        {cut.generation_status !== 'generating' && cut.generation_status !== 'failed' && (
+          <button onClick={handleGenerate}>{cut.image_url ? '다시 생성' : '이미지 생성'}</button>
+        )}
+        {cut.generation_status === 'failed' && (
           <button onClick={handleGenerate}>다시 시도</button>
-        </div>
-      )}
-      <label>
-        장면 설명
+        )}
+      </td>
+      <td className="cut-cell">
         <textarea value={sceneDescription} onChange={(e) => setSceneDescription(e.target.value)}
           onBlur={() => onUpdate({ scene_description: sceneDescription })} />
-      </label>
-      <label>
-        대사/내레이션
+      </td>
+      <td className="cut-cell">
         <textarea value={dialogue} onChange={(e) => setDialogue(e.target.value)}
           onBlur={() => onUpdate({ dialogue })} />
-      </label>
-      <label>
-        카메라 지시문
+      </td>
+      <td className="cut-cell">
         <input value={cameraDirection} onChange={(e) => setCameraDirection(e.target.value)}
           onBlur={() => onUpdate({ camera_direction: cameraDirection })} />
-      </label>
-      {error && <p className="error">{error}</p>}
-      {cut.generation_status !== 'generating' && cut.generation_status !== 'failed' && (
-        <button onClick={handleGenerate}>{cut.image_url ? '다시 생성' : '이미지 생성'}</button>
-      )}
-    </div>
+      </td>
+      <td className="cut-cell cut-cell-actions">
+        <button type="button" onClick={handleRemove}>삭제</button>
+        {error && <p className="error">{error}</p>}
+      </td>
+    </>
   );
 }

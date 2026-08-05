@@ -21,11 +21,11 @@ export default function SortableCutCard({ cut, index, onUpdate, onGenerate, onRe
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="sortable-cut-card">
-      <div className="drag-handle" {...attributes} {...listeners}>
-        ⠿ 드래그하여 순서 변경
-      </div>
+    <tr ref={setNodeRef} style={style} className="sortable-cut-card">
+      <td className="drag-handle-cell">
+        <span className="drag-handle" {...attributes} {...listeners}>⠿</span>
+      </td>
       <CutCard cut={cut} index={index} onUpdate={onUpdate} onGenerate={onGenerate} onRemove={onRemove} />
-    </div>
+    </tr>
   );
 }

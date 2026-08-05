@@ -92,18 +92,31 @@ export default function EditorPage() {
       </label>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={cuts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-          <div className="cut-list">
-            {cuts.map((cut, i) => (
-              <SortableCutCard
-                key={cut.id}
-                cut={cut}
-                index={i}
-                onUpdate={(patch) => updateCut(cut.id, patch)}
-                onGenerate={() => generateImage(cut.id)}
-                onRemove={() => removeCut(cut.id)}
-              />
-            ))}
-          </div>
+          <table className="cut-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>순서</th>
+                <th>이미지</th>
+                <th>장면 설명</th>
+                <th>대사/내레이션</th>
+                <th>카메라 지시문</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cuts.map((cut, i) => (
+                <SortableCutCard
+                  key={cut.id}
+                  cut={cut}
+                  index={i}
+                  onUpdate={(patch) => updateCut(cut.id, patch)}
+                  onGenerate={() => generateImage(cut.id)}
+                  onRemove={() => removeCut(cut.id)}
+                />
+              ))}
+            </tbody>
+          </table>
         </SortableContext>
       </DndContext>
       {error && <p className="error">{error}</p>}

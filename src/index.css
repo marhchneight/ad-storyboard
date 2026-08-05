@@ -15,8 +15,82 @@
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  display: block;
   min-width: 320px;
   min-height: 100vh;
+}
+
+#root {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.cut-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.cut-table th,
+.cut-table td {
+  border: 1px solid #444;
+  padding: 8px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.cut-table th {
+  background-color: #333;
+}
+
+.drag-handle-cell {
+  width: 24px;
+  text-align: center;
+}
+
+.drag-handle {
+  cursor: grab;
+}
+
+.cut-cell-index {
+  width: 40px;
+  text-align: center;
+}
+
+.cut-cell-image {
+  width: 180px;
+}
+
+.cut-thumb {
+  width: 160px;
+  height: 160px;
+  object-fit: cover;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.cut-thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  background-color: #333;
+  text-align: center;
+  font-size: 0.85em;
+}
+
+.cut-download-btn {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.cut-cell textarea,
+.cut-cell input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cut-cell-actions {
+  width: 90px;
 }
