@@ -11,14 +11,19 @@ export async function buildStoryboardPdf(project: Project, cuts: Cut[]): Promise
     doc.text(`${project.title} — 컷 ${i + 1}`, 40, 40);
 
     if (cut.image_url) {
-      const res = await fetch(cut.image_url);
-      const blob = await res.blob();
-      const dataUrl: string = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(blob);
-      });
-      doc.addImage(dataUrl, 'PNG', 40, 60, 200, 200);
+      try {
+        const res = await fetch(cut.image_url);
+        const blob = await res.blob();
+        const dataUrl: string = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+        doc.addImage(dataUrl, 'PNG', 40, 60, 200, 200);
+      } catch (err) {
+        console.warn(`Failed to embed image for cut ${i + 1}:`, err);
+      }
     }
 
     doc.setFontSize(11);
@@ -30,14 +35,19 @@ export async function buildStoryboardPdf(project: Project, cuts: Cut[]): Promise
   return doc;
 }
 
-export function downloadCutImage(cut: Cut, index: number) {
+export async function downloadCutImage(cut: Cut, index: number): Promise<void> {
   if (!cut.image_url) return;
-  const a = document.createElement('a');
-  a.href = cut.image_url;
-  a.download = `cut-${index + 1}.png`;
-  a.target = '_blank';
-  a.rel = 'noopener noreferrer';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  const res = await fetch(cut.image_url);
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = `cut-${index + 1}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }

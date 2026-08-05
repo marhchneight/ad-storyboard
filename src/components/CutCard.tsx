@@ -35,6 +35,15 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove }: 
     }
   }
 
+  async function handleDownload() {
+    setError(null);
+    try {
+      await downloadCutImage(cut, index);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   return (
     <div className="cut-card">
       <div className="cut-card-header">
@@ -45,7 +54,7 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove }: 
         <div>
           <img src={cut.image_url} alt={`컷 ${index + 1}`} width={256} />
           <div>
-            <button type="button" onClick={() => downloadCutImage(cut, index)}>이미지 다운로드</button>
+            <button type="button" onClick={handleDownload}>이미지 다운로드</button>
           </div>
         </div>
       )}
