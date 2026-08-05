@@ -6,9 +6,10 @@ interface Props {
   index: number;
   onUpdate: (patch: Partial<Cut>) => Promise<void>;
   onGenerate: () => Promise<void>;
+  onRemove: () => Promise<void>;
 }
 
-export default function CutCard({ cut, index, onUpdate, onGenerate }: Props) {
+export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove }: Props) {
   const [sceneDescription, setSceneDescription] = useState(cut.scene_description);
   const [dialogue, setDialogue] = useState(cut.dialogue);
   const [cameraDirection, setCameraDirection] = useState(cut.camera_direction);
@@ -24,9 +25,21 @@ export default function CutCard({ cut, index, onUpdate, onGenerate }: Props) {
     }
   }
 
+  async function handleRemove() {
+    setError(null);
+    try {
+      await onRemove();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   return (
     <div className="cut-card">
-      <h3>컷 {index + 1}</h3>
+      <div className="cut-card-header">
+        <h3>컷 {index + 1}</h3>
+        <button type="button" onClick={handleRemove}>삭제</button>
+      </div>
       {cut.image_url && <img src={cut.image_url} alt={`컷 ${index + 1}`} width={256} />}
       {cut.generation_status === 'generating' && <p>이미지 생성 중...</p>}
       {cut.generation_status === 'failed' && (

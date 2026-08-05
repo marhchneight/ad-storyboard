@@ -41,5 +41,30 @@ export function useCuts(projectId: string) {
     await refresh();
   }
 
-  return { cuts, loading, updateCut, generateImage, refresh };
+  const MIN_CUTS = 2;
+
+  async function addCut() {
+    const nextIndex = cuts.length;
+    const { error } = await supabase.from('cuts').insert({ project_id: projectId, order_index: nextIndex });
+    if (error) throw error;
+    await refresh();
+  }
+
+  async function removeCut(id: string) {
+    if (cuts.length <= MIN_CUTS) {
+      throw new Error(`컷은 최소 ${MIN_CUTS}개 이상이어야 합니다.`);
+    }
+    const { error } = await supabase.from('cuts').delete().eq('id', id);
+    if (error) throw error;
+    const remaining = cuts.filter((c) => c.id !== id).sort((a, b) => a.order_index - b.order_index);
+    await Promise.all(remaining.map((c, i) => supabase.from('cuts').update({ order_index: i }).eq('id', c.id)));
+    await refresh();
+  }
+
+  async function reorderCuts(orderedIds: string[]) {
+    await Promise.all(orderedIds.map((id, i) => supabase.from('cuts').update({ order_index: i }).eq('id', id)));
+    await refresh();
+  }
+
+  return { cuts, loading, updateCut, generateImage, refresh, addCut, removeCut, reorderCuts };
 }

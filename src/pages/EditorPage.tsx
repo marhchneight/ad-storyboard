@@ -1,15 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { supabase } from '../lib/supabaseClient';
 import { useCuts } from '../hooks/useCuts';
-import CutCard from '../components/CutCard';
+import SortableCutCard from '../components/SortableCutCard';
 import type { Project } from '../types';
 
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>();
   const [project, setProject] = useState<Project | null>(null);
   const [overallPrompt, setOverallPrompt] = useState('');
-  const { cuts, updateCut, generateImage } = useCuts(id!);
+  const [error, setError] = useState<string | null>(null);
+  const { cuts, updateCut, generateImage, addCut, removeCut, reorderCuts } = useCuts(id!);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
 
   useEffect(() => {
     supabase.from('projects').select('*').eq('id', id).single().then(({ data }) => {
@@ -25,6 +38,29 @@ export default function EditorPage() {
     await supabase.from('projects').update({ overall_prompt: overallPrompt }).eq('id', project.id);
   }
 
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = cuts.findIndex((c) => c.id === active.id);
+    const newIndex = cuts.findIndex((c) => c.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const newOrder = arrayMove(cuts, oldIndex, newIndex).map((c) => c.id);
+    try {
+      await reorderCuts(newOrder);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleAddCut() {
+    setError(null);
+    try {
+      await addCut();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   if (!project) return <div>로딩 중...</div>;
 
   return (
@@ -35,17 +71,24 @@ export default function EditorPage() {
         <textarea value={overallPrompt} onChange={(e) => setOverallPrompt(e.target.value)}
           onBlur={saveOverallPrompt} />
       </label>
-      <div className="cut-list">
-        {cuts.map((cut, i) => (
-          <CutCard
-            key={cut.id}
-            cut={cut}
-            index={i}
-            onUpdate={(patch) => updateCut(cut.id, patch)}
-            onGenerate={() => generateImage(cut.id)}
-          />
-        ))}
-      </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={cuts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+          <div className="cut-list">
+            {cuts.map((cut, i) => (
+              <SortableCutCard
+                key={cut.id}
+                cut={cut}
+                index={i}
+                onUpdate={(patch) => updateCut(cut.id, patch)}
+                onGenerate={() => generateImage(cut.id)}
+                onRemove={() => removeCut(cut.id)}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+      {error && <p className="error">{error}</p>}
+      <button type="button" onClick={handleAddCut}>컷 추가</button>
     </div>
   );
 }
