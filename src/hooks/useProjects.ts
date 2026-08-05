@@ -31,7 +31,10 @@ export async function createProject(input: {
     order_index: i,
   }));
   const { error: cutsError } = await supabase.from('cuts').insert(cutRows);
-  if (cutsError) throw cutsError;
+  if (cutsError) {
+    await supabase.from('projects').delete().eq('id', project.id);
+    throw cutsError;
+  }
 
   return project as Project;
 }
