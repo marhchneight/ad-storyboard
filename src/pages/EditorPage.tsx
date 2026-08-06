@@ -132,9 +132,9 @@ export default function EditorPage() {
 
       <div className="card prompt-card">
         <span className="field-label">카피 파일 업로드 (.txt, .docx, .pptx)</span>
-        <p>광고 카피 파일을 올리면 AI가 컷 순서에 맞게 대사/내레이션을 자동으로 채워줘요.</p>
+        <p>광고 카피 파일을 올리면 AI가 컷 순서에 맞게 카피/멘트를 자동으로 채워줘요.</p>
         <input type="file" accept=".txt,.docx,.pptx" onChange={handleCopyFileChange} disabled={distributingCopy} />
-        {distributingCopy && <p>카피를 분석해서 대사에 반영하는 중...</p>}
+        {distributingCopy && <p>카피를 분석해서 카피/멘트에 반영하는 중...</p>}
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -147,7 +147,7 @@ export default function EditorPage() {
                   <th>순서</th>
                   <th>이미지</th>
                   <th>장면 설명</th>
-                  <th>대사/내레이션</th>
+                  <th>카피/멘트</th>
                   <th>카메라 지시문</th>
                   <th>관리</th>
                 </tr>

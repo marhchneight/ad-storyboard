@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       `${i + 1}. ${c.scene_description || '(장면 설명 없음)'}`
     ).join('\n');
 
-    const systemPrompt = '당신은 광고 카피라이터 어시스턴트입니다. 주어진 광고 카피 원본 텍스트를 스토리보드의 각 컷 순서와 장면 설명에 맞게 자연스러운 대사/내레이션으로 나누어 배정하세요. 반드시 컷 개수와 정확히 동일한 개수의 문자열 배열을 담은 JSON 객체 {"dialogues": ["...", "..."]} 형식으로만 응답하세요.';
+    const systemPrompt = '당신은 광고 카피라이터 어시스턴트입니다. 주어진 광고 카피 원본 텍스트를 스토리보드의 각 컷 순서와 장면 설명에 맞게 자연스러운 카피/멘트로 나누어 배정하세요. 반드시 컷 개수와 정확히 동일한 개수의 문자열 배열을 담은 JSON 객체 {"dialogues": ["...", "..."]} 형식으로만 응답하세요.';
     const userPrompt = `전체 콘셉트: ${project.overall_prompt || '(없음)'}\n\n컷 목록 (${cuts.length}개):\n${cutList}\n\n광고 카피 원본:\n${copyText}`;
 
     const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     }
 
     if (!Array.isArray(dialogues) || dialogues.length !== cuts.length) {
-      return jsonResponse({ error: `AI가 컷 개수(${cuts.length}개)와 다른 개수의 대사를 반환했습니다.` }, 502);
+      return jsonResponse({ error: `AI가 컷 개수(${cuts.length}개)와 다른 개수의 카피/멘트를 반환했습니다.` }, 502);
     }
 
     for (let i = 0; i < cuts.length; i++) {

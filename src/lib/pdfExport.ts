@@ -28,7 +28,7 @@ export async function buildStoryboardPdf(project: Project, cuts: Cut[]): Promise
 
     doc.setFontSize(11);
     doc.text(`장면 설명: ${cut.scene_description || '-'}`, 40, 280, { maxWidth: 500 });
-    doc.text(`대사/내레이션: ${cut.dialogue || '-'}`, 40, 320, { maxWidth: 500 });
+    doc.text(`카피/멘트: ${cut.dialogue || '-'}`, 40, 320, { maxWidth: 500 });
     doc.text(`카메라 지시문: ${cut.camera_direction || '-'}`, 40, 360, { maxWidth: 500 });
   }
 
