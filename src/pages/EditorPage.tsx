@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useCuts } from '../hooks/useCuts';
 import SortableCutCard from '../components/SortableCutCard';
 import { buildStoryboardPdf } from '../lib/pdfExport';
+import { extractTextFromFile } from '../lib/copyFileParser';
 import type { Project } from '../types';
 
 export default function EditorPage() {
@@ -21,7 +22,8 @@ export default function EditorPage() {
   const [overallPrompt, setOverallPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const { cuts, updateCut, generateImage, addCut, removeCut, reorderCuts } = useCuts(id!);
+  const [distributingCopy, setDistributingCopy] = useState(false);
+  const { cuts, updateCut, generateImage, addCut, removeCut, reorderCuts, refresh } = useCuts(id!);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -63,6 +65,37 @@ export default function EditorPage() {
     }
   }
 
+  async function handleCopyFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !project) return;
+
+    setError(null);
+    setDistributingCopy(true);
+    try {
+      const copyText = await extractTextFromFile(file);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/distribute-copy`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: project.id, copyText }),
+        }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: '카피 반영에 실패했습니다.' }));
+        throw new Error(body.error ?? '카피 반영에 실패했습니다.');
+      }
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDistributingCopy(false);
+    }
+  }
+
   async function handleExportPdf() {
     if (!project) return;
     setError(null);
@@ -95,6 +128,13 @@ export default function EditorPage() {
         <span className="field-label">전체 콘셉트 프롬프트</span>
         <textarea value={overallPrompt} onChange={(e) => setOverallPrompt(e.target.value)}
           onBlur={saveOverallPrompt} />
+      </div>
+
+      <div className="card prompt-card">
+        <span className="field-label">카피 파일 업로드 (.txt, .docx, .pptx)</span>
+        <p>광고 카피 파일을 올리면 AI가 컷 순서에 맞게 대사/내레이션을 자동으로 채워줘요.</p>
+        <input type="file" accept=".txt,.docx,.pptx" onChange={handleCopyFileChange} disabled={distributingCopy} />
+        {distributingCopy && <p>카피를 분석해서 대사에 반영하는 중...</p>}
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
