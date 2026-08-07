@@ -14,7 +14,10 @@ import { useCuts } from '../hooks/useCuts';
 import SortableCutCard from '../components/SortableCutCard';
 import { buildStoryboardPdf } from '../lib/pdfExport';
 import { extractTextFromFile } from '../lib/copyFileParser';
-import { applyDirectorPreset, askTheDirector, DIRECTOR_PRESETS, type DirectorPreset } from '../lib/directorApi';
+import {
+  applyDirectorPreset, askTheDirector, applyMakeItCrazy, DIRECTOR_PRESETS, type DirectorPreset,
+} from '../lib/directorApi';
+import { pickRandomConstraint } from '../lib/creativeRoulette';
 import type { Cut, Project } from '../types';
 
 export default function EditorPage() {
@@ -28,6 +31,7 @@ export default function EditorPage() {
   const [directorInstruction, setDirectorInstruction] = useState('');
   const [lastChanges, setLastChanges] = useState<string[] | null>(null);
   const [history, setHistory] = useState<Cut[][]>([]);
+  const [rouletteConstraint, setRouletteConstraint] = useState<string | null>(null);
   const { cuts, updateCut, generateImage, addCut, removeCut, reorderCuts, refresh, restoreSnapshot } = useCuts(id!);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -147,6 +151,60 @@ export default function EditorPage() {
     }
   }
 
+  async function handleMakeItCrazy() {
+    if (!project) return;
+    setError(null);
+    setLastChanges(null);
+    pushHistory();
+    setDirecting(true);
+    try {
+      const changes = await applyMakeItCrazy(project.id);
+      await refresh();
+      const { data } = await supabase.from('projects').select('*').eq('id', project.id).single();
+      if (data) setProject(data as Project);
+      setLastChanges(changes);
+    } catch (err) {
+      setHistory((prev) => prev.slice(0, -1));
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDirecting(false);
+    }
+  }
+
+  function handleOpenRoulette() {
+    setRouletteConstraint(pickRandomConstraint());
+  }
+
+  function handleShuffleRoulette() {
+    setRouletteConstraint((prev) => pickRandomConstraint(prev ?? undefined));
+  }
+
+  function handleCancelRoulette() {
+    setRouletteConstraint(null);
+  }
+
+  async function handleApplyRoulette() {
+    if (!project || !rouletteConstraint) return;
+    const constraint = rouletteConstraint;
+    setError(null);
+    setLastChanges(null);
+    setRouletteConstraint(null);
+    pushHistory();
+    setDirecting(true);
+    try {
+      const changes = await askTheDirector(project.id, constraint);
+      await refresh();
+      const { data } = await supabase.from('projects').select('*').eq('id', project.id).single();
+      if (data) setProject(data as Project);
+      setLastChanges(changes);
+    } catch (err) {
+      setHistory((prev) => prev.slice(0, -1));
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDirecting(false);
+    }
+  }
+
   async function handleUndo() {
     if (history.length === 0) return;
     setError(null);
@@ -227,6 +285,33 @@ export default function EditorPage() {
             <ul>
               {lastChanges.map((change, i) => <li key={i}>{change}</li>)}
             </ul>
+          </div>
+        )}
+
+        <div className="signature-row">
+          <button type="button" className="btn-crazy" onClick={handleMakeItCrazy} disabled={directing}>
+            MAKE IT CRAZY
+          </button>
+          <button type="button" className="btn-secondary" onClick={handleOpenRoulette} disabled={directing}>
+            Creative Roulette
+          </button>
+        </div>
+
+        {rouletteConstraint && (
+          <div className="roulette-card">
+            <span className="field-label">Creative Constraint</span>
+            <p>{rouletteConstraint}</p>
+            <div className="roulette-actions">
+              <button type="button" className="btn-primary btn-small" onClick={handleApplyRoulette} disabled={directing}>
+                Apply
+              </button>
+              <button type="button" className="btn-secondary btn-small" onClick={handleShuffleRoulette} disabled={directing}>
+                Shuffle
+              </button>
+              <button type="button" className="btn-text" onClick={handleCancelRoulette} disabled={directing}>
+                Cancel
+              </button>
+            </div>
           </div>
         )}
       </div>

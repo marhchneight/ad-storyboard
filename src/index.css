@@ -520,3 +520,46 @@ a.btn-primary {
   gap: 6px;
 }
 
+/* Make It Crazy / Creative Roulette */
+
+.signature-row {
+  display: flex;
+  gap: 12px;
+  border-top: 1px solid #E8E8E8;
+  padding-top: 16px;
+}
+
+.btn-crazy {
+  background-color: #111111;
+  color: #FFFFFF;
+  border: 2px solid #111111;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.btn-crazy:hover:not(:disabled) {
+  transform: translateY(-1px);
+  opacity: 0.85;
+}
+
+.roulette-card {
+  border: 1px dashed #111111;
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.roulette-card p {
+  color: #111111;
+  font-size: 1.05rem;
+  font-weight: 500;
+  margin: 4px 0 16px;
+}
+
+.roulette-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+

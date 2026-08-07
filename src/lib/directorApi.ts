@@ -41,6 +41,12 @@ export async function askTheDirector(projectId: string, instruction: string): Pr
   return (json.changes as string[]) ?? [];
 }
 
+/** Pushes the storyboard toward a bolder, higher creative-risk reinterpretation (same product/message). */
+export async function applyMakeItCrazy(projectId: string): Promise<string[]> {
+  const json = await postJson('storyboard-editor', { projectId, preset: 'make_it_crazy' });
+  return (json.changes as string[]) ?? [];
+}
+
 export type ShotQuickAction =
   | 'reframe' | 'change_lens' | 'change_angle' | 'more_cinematic'
   | 'more_product_focused' | 'simplify' | 'surprise_me' | 'rewrite';

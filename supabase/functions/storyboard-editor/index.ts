@@ -32,6 +32,13 @@ const PRESET_DIRECTIONS: Record<string, string> = {
     'breathing room.',
   more_minimal:
     'Make it more minimal: fewer shots, simplified composition, restrained movement, less visual noise.',
+  make_it_crazy:
+    'Push the idea further. Act like a creative director telling the team "let\'s go bolder." Take real ' +
+    'creative risks: replace the opening shot with something unexpected, delay the product reveal, use ' +
+    'asymmetrical or unconventional framing, add a visual metaphor, consider a match cut, turn an ordinary ' +
+    'product shot into a conceptual one, or reorder part of the narrative. Do not simply make it weird for ' +
+    'its own sake — every risk must still serve the brand message and purpose of the ad. Keep the product, ' +
+    'the message, and the target audience intact.',
 };
 
 const CORS_HEADERS: Record<string, string> = {
