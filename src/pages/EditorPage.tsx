@@ -15,9 +15,11 @@ import SortableCutCard from '../components/SortableCutCard';
 import { buildStoryboardPdf } from '../lib/pdfExport';
 import { extractTextFromFile } from '../lib/copyFileParser';
 import {
-  applyDirectorPreset, askTheDirector, applyMakeItCrazy, DIRECTOR_PRESETS, type DirectorPreset,
+  applyDirectorPreset, askTheDirector, applyMakeItCrazy, type DirectorPreset,
 } from '../lib/directorApi';
 import { pickRandomConstraint } from '../lib/creativeRoulette';
+import DirectorControls from '../components/director/DirectorControls';
+import CreativeDnaPanel from '../components/creative-dna/CreativeDnaPanel';
 import type { Cut, Project } from '../types';
 
 export default function EditorPage() {
@@ -258,63 +260,32 @@ export default function EditorPage() {
         </div>
       )}
 
-      <div className="card prompt-card director-controls">
-        <span className="field-label">Director Controls</span>
-        <div className="preset-row">
-          {DIRECTOR_PRESETS.map((preset) => (
-            <button key={preset.id} type="button" className="btn-secondary btn-small preset-btn"
-              onClick={() => handleApplyPreset(preset.id)} disabled={directing}
-              title={preset.description}>
-              {preset.label}
-            </button>
-          ))}
-        </div>
+      <DirectorControls
+        directing={directing}
+        onApplyPreset={handleApplyPreset}
+        directorInstruction={directorInstruction}
+        onDirectorInstructionChange={setDirectorInstruction}
+        onAskDirector={handleAskDirector}
+        lastChanges={lastChanges}
+        onMakeItCrazy={handleMakeItCrazy}
+        rouletteConstraint={rouletteConstraint}
+        onOpenRoulette={handleOpenRoulette}
+        onShuffleRoulette={handleShuffleRoulette}
+        onApplyRoulette={handleApplyRoulette}
+        onCancelRoulette={handleCancelRoulette}
+      />
 
-        <form onSubmit={handleAskDirector} className="ask-director-form">
-          <span className="field-label">Ask the Director</span>
-          <textarea value={directorInstruction} onChange={(e) => setDirectorInstruction(e.target.value)}
-            placeholder="Tell the director what to change…" disabled={directing} />
-          <button type="submit" className="btn-secondary" disabled={directing || !directorInstruction.trim()}>
-            {directing ? '연출 방향을 다시 잡는 중...' : '감독에게 지시하기'}
-          </button>
-        </form>
-
-        {lastChanges && lastChanges.length > 0 && (
-          <div className="changes-summary">
-            <span className="field-label">Changed</span>
-            <ul>
-              {lastChanges.map((change, i) => <li key={i}>{change}</li>)}
-            </ul>
-          </div>
-        )}
-
-        <div className="signature-row">
-          <button type="button" className="btn-crazy" onClick={handleMakeItCrazy} disabled={directing}>
-            MAKE IT CRAZY
-          </button>
-          <button type="button" className="btn-secondary" onClick={handleOpenRoulette} disabled={directing}>
-            Creative Roulette
-          </button>
-        </div>
-
-        {rouletteConstraint && (
-          <div className="roulette-card">
-            <span className="field-label">Creative Constraint</span>
-            <p>{rouletteConstraint}</p>
-            <div className="roulette-actions">
-              <button type="button" className="btn-primary btn-small" onClick={handleApplyRoulette} disabled={directing}>
-                Apply
-              </button>
-              <button type="button" className="btn-secondary btn-small" onClick={handleShuffleRoulette} disabled={directing}>
-                Shuffle
-              </button>
-              <button type="button" className="btn-text" onClick={handleCancelRoulette} disabled={directing}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      <CreativeDnaPanel
+        project={project}
+        onBeforeApply={pushHistory}
+        onApplied={(changes, updatedProject) => {
+          setProject(updatedProject);
+          if (changes.length > 0) {
+            setLastChanges(changes);
+            refresh();
+          }
+        }}
+      />
 
       <div className="card prompt-card">
         <span className="field-label">전체 콘셉트 프롬프트</span>

@@ -16,6 +16,21 @@ export interface CreativeBrief {
   conceptDescription?: string;
 }
 
+export interface CreativeDnaScore {
+  label: string;
+  score: number;
+}
+
+export interface CreativeDna {
+  visualLanguage: CreativeDnaScore[];
+  cameraDna: string[];
+  lightingDna: string[];
+  compositionDna: string[];
+  editRhythmDna: string[];
+  colorMood: string[];
+  creativePrinciples: string[];
+}
+
 export interface Project {
   id: string;
   user_id: string;
@@ -24,6 +39,7 @@ export interface Project {
   overall_prompt: string;
   brief: CreativeBrief;
   creative_direction: string;
+  creative_dna: CreativeDna | null;
   created_at: string;
   updated_at: string;
 }
