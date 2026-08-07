@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Cut } from '../types';
 import { downloadCutImage } from '../lib/pdfExport';
+import { editShot, SHOT_QUICK_ACTIONS, type ShotQuickAction } from '../lib/directorApi';
 
 interface Props {
   cut: Cut;
@@ -8,13 +9,45 @@ interface Props {
   onUpdate: (patch: Partial<Cut>) => Promise<void>;
   onGenerate: () => Promise<void>;
   onRemove: () => Promise<void>;
+  onAiEdited: () => Promise<void>;
 }
 
-export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove }: Props) {
+export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, onAiEdited }: Props) {
   const [sceneDescription, setSceneDescription] = useState(cut.scene_description);
   const [dialogue, setDialogue] = useState(cut.dialogue);
   const [cameraDirection, setCameraDirection] = useState(cut.camera_direction);
   const [error, setError] = useState<string | null>(null);
+  const [aiInstruction, setAiInstruction] = useState('');
+  const [aiEditing, setAiEditing] = useState(false);
+
+  async function handleQuickAction(action: ShotQuickAction) {
+    setError(null);
+    setAiEditing(true);
+    try {
+      await editShot(cut.id, { action });
+      await onAiEdited();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAiEditing(false);
+    }
+  }
+
+  async function handleAiInstructionSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!aiInstruction.trim()) return;
+    setError(null);
+    setAiEditing(true);
+    try {
+      await editShot(cut.id, { instruction: aiInstruction.trim() });
+      await onAiEdited();
+      setAiInstruction('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAiEditing(false);
+    }
+  }
 
   async function handleGenerate() {
     setError(null);
@@ -85,6 +118,24 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove }: 
       </td>
       <td className="cut-cell cut-cell-actions">
         <button type="button" className="btn-text" onClick={handleRemove}>삭제</button>
+        <details className="shot-ai-edit">
+          <summary>AI 수정</summary>
+          <div className="shot-ai-quick-actions">
+            {SHOT_QUICK_ACTIONS.map((qa) => (
+              <button key={qa.id} type="button" className="btn-secondary btn-small"
+                onClick={() => handleQuickAction(qa.id)} disabled={aiEditing}>
+                {qa.label}
+              </button>
+            ))}
+          </div>
+          <form onSubmit={handleAiInstructionSubmit} className="shot-ai-instruction-form">
+            <input value={aiInstruction} onChange={(e) => setAiInstruction(e.target.value)}
+              placeholder="예: 카메라를 좀 더 낮춰줘" disabled={aiEditing} />
+            <button type="submit" className="btn-secondary btn-small" disabled={aiEditing || !aiInstruction.trim()}>
+              {aiEditing ? '수정 중...' : '적용'}
+            </button>
+          </form>
+        </details>
         {error && <p className="error">{error}</p>}
       </td>
     </>

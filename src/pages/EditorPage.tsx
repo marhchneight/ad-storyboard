@@ -14,7 +14,8 @@ import { useCuts } from '../hooks/useCuts';
 import SortableCutCard from '../components/SortableCutCard';
 import { buildStoryboardPdf } from '../lib/pdfExport';
 import { extractTextFromFile } from '../lib/copyFileParser';
-import type { Project } from '../types';
+import { applyDirectorPreset, askTheDirector, DIRECTOR_PRESETS, type DirectorPreset } from '../lib/directorApi';
+import type { Cut, Project } from '../types';
 
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,7 +24,11 @@ export default function EditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [distributingCopy, setDistributingCopy] = useState(false);
-  const { cuts, updateCut, generateImage, addCut, removeCut, reorderCuts, refresh } = useCuts(id!);
+  const [directing, setDirecting] = useState(false);
+  const [directorInstruction, setDirectorInstruction] = useState('');
+  const [lastChanges, setLastChanges] = useState<string[] | null>(null);
+  const [history, setHistory] = useState<Cut[][]>([]);
+  const { cuts, updateCut, generateImage, addCut, removeCut, reorderCuts, refresh, restoreSnapshot } = useCuts(id!);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -96,6 +101,65 @@ export default function EditorPage() {
     }
   }
 
+  function pushHistory() {
+    setHistory((prev) => [...prev, cuts.map((c) => ({ ...c }))]);
+  }
+
+  async function handleApplyPreset(preset: DirectorPreset) {
+    if (!project) return;
+    setError(null);
+    setLastChanges(null);
+    pushHistory();
+    setDirecting(true);
+    try {
+      const changes = await applyDirectorPreset(project.id, preset);
+      await refresh();
+      const { data } = await supabase.from('projects').select('*').eq('id', project.id).single();
+      if (data) setProject(data as Project);
+      setLastChanges(changes);
+    } catch (err) {
+      setHistory((prev) => prev.slice(0, -1));
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDirecting(false);
+    }
+  }
+
+  async function handleAskDirector(e: React.FormEvent) {
+    e.preventDefault();
+    if (!project || !directorInstruction.trim()) return;
+    setError(null);
+    setLastChanges(null);
+    pushHistory();
+    setDirecting(true);
+    try {
+      const changes = await askTheDirector(project.id, directorInstruction.trim());
+      await refresh();
+      const { data } = await supabase.from('projects').select('*').eq('id', project.id).single();
+      if (data) setProject(data as Project);
+      setLastChanges(changes);
+      setDirectorInstruction('');
+    } catch (err) {
+      setHistory((prev) => prev.slice(0, -1));
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDirecting(false);
+    }
+  }
+
+  async function handleUndo() {
+    if (history.length === 0) return;
+    setError(null);
+    setLastChanges(null);
+    const snapshot = history[history.length - 1];
+    setHistory((prev) => prev.slice(0, -1));
+    try {
+      await restoreSnapshot(snapshot);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function handleExportPdf() {
     if (!project) return;
     setError(null);
@@ -119,9 +183,14 @@ export default function EditorPage() {
           <p className="eyebrow">Storyboard</p>
           <h1>{project.title}</h1>
         </div>
-        <button type="button" className="btn-primary" onClick={handleExportPdf} disabled={exporting}>
-          {exporting ? 'PDF 생성 중...' : 'PDF로 내보내기'}
-        </button>
+        <div className="page-header-actions">
+          <button type="button" className="btn-secondary" onClick={handleUndo} disabled={history.length === 0 || directing}>
+            Undo
+          </button>
+          <button type="button" className="btn-primary" onClick={handleExportPdf} disabled={exporting}>
+            {exporting ? 'PDF 생성 중...' : 'PDF로 내보내기'}
+          </button>
+        </div>
       </div>
 
       {project.creative_direction && (
@@ -130,6 +199,37 @@ export default function EditorPage() {
           <p>{project.creative_direction}</p>
         </div>
       )}
+
+      <div className="card prompt-card director-controls">
+        <span className="field-label">Director Controls</span>
+        <div className="preset-row">
+          {DIRECTOR_PRESETS.map((preset) => (
+            <button key={preset.id} type="button" className="btn-secondary btn-small preset-btn"
+              onClick={() => handleApplyPreset(preset.id)} disabled={directing}
+              title={preset.description}>
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={handleAskDirector} className="ask-director-form">
+          <span className="field-label">Ask the Director</span>
+          <textarea value={directorInstruction} onChange={(e) => setDirectorInstruction(e.target.value)}
+            placeholder="Tell the director what to change…" disabled={directing} />
+          <button type="submit" className="btn-secondary" disabled={directing || !directorInstruction.trim()}>
+            {directing ? '연출 방향을 다시 잡는 중...' : '감독에게 지시하기'}
+          </button>
+        </form>
+
+        {lastChanges && lastChanges.length > 0 && (
+          <div className="changes-summary">
+            <span className="field-label">Changed</span>
+            <ul>
+              {lastChanges.map((change, i) => <li key={i}>{change}</li>)}
+            </ul>
+          </div>
+        )}
+      </div>
 
       <div className="card prompt-card">
         <span className="field-label">전체 콘셉트 프롬프트</span>
@@ -169,6 +269,7 @@ export default function EditorPage() {
                     onUpdate={(patch) => updateCut(cut.id, patch)}
                     onGenerate={() => generateImage(cut.id)}
                     onRemove={() => removeCut(cut.id)}
+                    onAiEdited={refresh}
                   />
                 ))}
               </tbody>

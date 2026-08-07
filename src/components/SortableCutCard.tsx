@@ -9,9 +9,10 @@ interface Props {
   onUpdate: (patch: Partial<Cut>) => Promise<void>;
   onGenerate: () => Promise<void>;
   onRemove: () => Promise<void>;
+  onAiEdited: () => Promise<void>;
 }
 
-export default function SortableCutCard({ cut, index, onUpdate, onGenerate, onRemove }: Props) {
+export default function SortableCutCard({ cut, index, onUpdate, onGenerate, onRemove, onAiEdited }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cut.id });
 
   const style = {
@@ -25,7 +26,8 @@ export default function SortableCutCard({ cut, index, onUpdate, onGenerate, onRe
       <td className="drag-handle-cell">
         <span className="drag-handle" {...attributes} {...listeners}>⠿</span>
       </td>
-      <CutCard cut={cut} index={index} onUpdate={onUpdate} onGenerate={onGenerate} onRemove={onRemove} />
+      <CutCard cut={cut} index={index} onUpdate={onUpdate} onGenerate={onGenerate} onRemove={onRemove}
+        onAiEdited={onAiEdited} />
     </tr>
   );
 }

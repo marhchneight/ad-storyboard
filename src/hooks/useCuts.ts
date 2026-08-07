@@ -66,5 +66,53 @@ export function useCuts(projectId: string) {
     await refresh();
   }
 
-  return { cuts, loading, updateCut, generateImage, refresh, addCut, removeCut, reorderCuts };
+  /**
+   * Restores the storyboard to a previously captured snapshot (used for Undo after an
+   * AI-driven whole-storyboard edit). Reconciles by id: existing rows are updated in place,
+   * rows present in the snapshot but missing now are re-inserted with their original id,
+   * and rows present now but absent from the snapshot are deleted.
+   */
+  async function restoreSnapshot(snapshot: Cut[]) {
+    const currentIds = new Set(cuts.map((c) => c.id));
+    const snapshotIds = new Set(snapshot.map((c) => c.id));
+
+    for (const cut of snapshot) {
+      const fields = {
+        order_index: cut.order_index,
+        scene_description: cut.scene_description,
+        dialogue: cut.dialogue,
+        camera_direction: cut.camera_direction,
+        image_url: cut.image_url,
+        generation_status: cut.generation_status,
+        duration_seconds: cut.duration_seconds,
+        shot_size: cut.shot_size,
+        lens: cut.lens,
+        angle: cut.angle,
+        movement: cut.movement,
+        composition: cut.composition,
+        action: cut.action,
+        lighting: cut.lighting,
+        mood: cut.mood,
+        location: cut.location,
+        props: cut.props,
+        sfx: cut.sfx,
+        transition: cut.transition,
+        purpose: cut.purpose,
+      };
+      if (currentIds.has(cut.id)) {
+        await supabase.from('cuts').update(fields).eq('id', cut.id);
+      } else {
+        await supabase.from('cuts').insert({ id: cut.id, project_id: projectId, ...fields });
+      }
+    }
+
+    const toDelete = cuts.filter((c) => !snapshotIds.has(c.id)).map((c) => c.id);
+    if (toDelete.length > 0) {
+      await supabase.from('cuts').delete().in('id', toDelete);
+    }
+
+    await refresh();
+  }
+
+  return { cuts, loading, updateCut, generateImage, refresh, addCut, removeCut, reorderCuts, restoreSnapshot };
 }

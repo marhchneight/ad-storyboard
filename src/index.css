@@ -453,3 +453,70 @@ a.btn-primary {
   color: #111111;
 }
 
+/* Director Controls */
+
+.director-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-btn {
+  border-color: #111111;
+}
+
+.ask-director-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ask-director-form textarea {
+  min-height: 56px;
+}
+
+.changes-summary {
+  border-top: 1px solid #E8E8E8;
+  padding-top: 12px;
+}
+
+.changes-summary ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #666666;
+  font-size: 0.85rem;
+}
+
+/* Individual shot AI edit */
+
+.shot-ai-edit {
+  margin-top: 8px;
+}
+
+.shot-ai-edit summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #666666;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.shot-ai-quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.shot-ai-instruction-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
