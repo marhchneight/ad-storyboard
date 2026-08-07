@@ -386,3 +386,70 @@ a.btn-primary {
 .cut-cell-actions {
   width: 90px;
 }
+
+/* Idea / Director brief */
+
+.idea-subtitle {
+  margin-bottom: 24px;
+}
+
+.brief-details {
+  border-top: 1px solid #E8E8E8;
+  padding-top: 20px;
+  margin: 4px 0 20px;
+}
+
+.director-loading {
+  text-align: center;
+  font-style: italic;
+  color: #666666;
+  padding: 12px 0;
+}
+
+.director-note {
+  border-left: 3px solid #111111;
+}
+
+/* Shot details disclosure */
+
+.cut-cell-details {
+  width: 140px;
+}
+
+.shot-details-empty {
+  color: #999999;
+  font-size: 0.85rem;
+}
+
+.shot-details summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #666666;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.shot-details dl {
+  margin: 10px 0 0;
+}
+
+.shot-details-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.78rem;
+  padding: 3px 0;
+  border-bottom: 1px solid #F0EEE9;
+}
+
+.shot-details-row dt {
+  color: #666666;
+  white-space: nowrap;
+}
+
+.shot-details-row dd {
+  margin: 0;
+  text-align: right;
+  color: #111111;
+}
+

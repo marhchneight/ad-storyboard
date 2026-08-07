@@ -4,14 +4,21 @@ import type { Project, Cut } from '../types';
 
 const project: Project = {
   id: 'p1', user_id: 'u1', title: '테스트 프로젝트', style: 'sketch',
-  overall_prompt: '콘셉트', created_at: '', updated_at: '',
+  overall_prompt: '콘셉트', brief: {}, creative_direction: '', created_at: '', updated_at: '',
+};
+
+const shotDetailDefaults = {
+  duration_seconds: null, shot_size: '', lens: '', angle: '', movement: '', composition: '',
+  action: '', lighting: '', mood: '', location: '', props: '', sfx: '', transition: '', purpose: '',
 };
 
 const cuts: Cut[] = [
   { id: 'c1', project_id: 'p1', order_index: 0, scene_description: '장면1', dialogue: '대사1',
-    camera_direction: '클로즈업', image_url: null, generation_status: 'idle', created_at: '', updated_at: '' },
+    camera_direction: '클로즈업', image_url: null, generation_status: 'idle', created_at: '', updated_at: '',
+    ...shotDetailDefaults },
   { id: 'c2', project_id: 'p1', order_index: 1, scene_description: '장면2', dialogue: '대사2',
-    camera_direction: '', image_url: null, generation_status: 'idle', created_at: '', updated_at: '' },
+    camera_direction: '', image_url: null, generation_status: 'idle', created_at: '', updated_at: '',
+    ...shotDetailDefaults },
 ];
 
 // A tiny valid 1x1 transparent PNG, base64-encoded.

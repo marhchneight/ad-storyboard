@@ -124,6 +124,13 @@ export default function EditorPage() {
         </button>
       </div>
 
+      {project.creative_direction && (
+        <div className="card prompt-card director-note">
+          <span className="field-label">Creative Direction</span>
+          <p>{project.creative_direction}</p>
+        </div>
+      )}
+
       <div className="card prompt-card">
         <span className="field-label">전체 콘셉트 프롬프트</span>
         <textarea value={overallPrompt} onChange={(e) => setOverallPrompt(e.target.value)}
@@ -149,6 +156,7 @@ export default function EditorPage() {
                   <th>장면 설명</th>
                   <th>카피/멘트</th>
                   <th>카메라 지시문</th>
+                  <th>연출 디테일</th>
                   <th>관리</th>
                 </tr>
               </thead>
