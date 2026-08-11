@@ -10,10 +10,22 @@ const OUTPUT_CONTRACT =
   '{"shot": {"duration": number, "shotSize": string, "lens": string, "angle": string, "movement": string, ' +
   '"composition": string, "visual": string, "action": string, "lighting": string, "mood": string, ' +
   '"location": string, "props": string, "dialogue": string, "sfx": string, "transition": string, ' +
-  '"purpose": string, "characterIds": string[], "productIds": string[], "locationId": (string or null)}}. ' +
-  '"characterIds"/"productIds"/"locationId" must reference the persistent entity ids listed below and must ' +
-  'stay exactly the same as the current shot\'s ids unless the edit instruction explicitly changes which ' +
-  'entity appears in this shot. Never invent a new entity id. Never wrap the JSON in markdown code fences.';
+  '"purpose": string, "imagePrompt": string, "characterIds": string[], "productIds": string[], ' +
+  '"locationId": (string or null)}}. "imagePrompt" is a separate English-only field for an image-generation ' +
+  'model (see language policy below). "characterIds"/"productIds"/"locationId" must reference the persistent ' +
+  'entity ids listed below and must stay exactly the same as the current shot\'s ids unless the edit ' +
+  'instruction explicitly changes which entity appears in this shot. Never invent a new entity id. Never ' +
+  'wrap the JSON in markdown code fences.';
+
+const LANGUAGE_POLICY =
+  'Language policy: every field you return except "imagePrompt" must be written in natural Korean, concise ' +
+  'and appropriate for a professional commercial storyboard used on a Korean production set. Do not ' +
+  'translate literally from English — write as a Korean production team actually would (e.g. "아이레벨 고정 ' +
+  '숏" not "카메라는 눈 높이에 위치하고 정적입니다"). Industry-standard cinematography loanwords such as 클로즈업, ' +
+  '풀 숏, 아이레벨, 하이앵글, 로우앵글, 달리 인, 팬, 틸트, 핸드헬드 may be used naturally. "imagePrompt" is the ' +
+  'only exception — it must always be a concise English sentence describing exactly what the camera should ' +
+  'see (subject, action, framing/angle), written for an image-generation model, and must never affect the ' +
+  'language of any other field.';
 
 interface VisualBibleSummaryEntity {
   id: string;
@@ -77,6 +89,7 @@ interface RevisedShot {
   sfx: string;
   transition: string;
   purpose: string;
+  imagePrompt?: string;
   characterIds?: string[];
   productIds?: string[];
   locationId?: string | null;
@@ -165,6 +178,7 @@ Deno.serve(async (req) => {
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: DIRECTOR_SYSTEM_ROLE },
+          { role: 'system', content: LANGUAGE_POLICY },
           { role: 'user', content: userPrompt },
         ],
         response_format: { type: 'json_object' },
@@ -195,7 +209,7 @@ Deno.serve(async (req) => {
     const { error: updateError } = await supabase.from('cuts').update({
       scene_description: shot.visual ?? '',
       dialogue: shot.dialogue ?? '',
-      camera_direction: [shot.angle, shot.movement].filter(Boolean).join(', '),
+      camera_direction: [shot.angle, shot.movement].filter(Boolean).join(' · '),
       duration_seconds: typeof shot.duration === 'number' ? shot.duration : null,
       shot_size: shot.shotSize ?? '',
       lens: shot.lens ?? '',
@@ -210,6 +224,9 @@ Deno.serve(async (req) => {
       sfx: shot.sfx ?? '',
       transition: shot.transition ?? '',
       purpose: shot.purpose ?? '',
+      image_prompt: (typeof shot.imagePrompt === 'string' && shot.imagePrompt.trim())
+        ? shot.imagePrompt
+        : (cut.image_prompt ?? ''),
       entity_refs: {
         characters: Array.isArray(shot.characterIds) ? shot.characterIds : (currentEntityRefs.characters ?? []),
         products: Array.isArray(shot.productIds) ? shot.productIds : (currentEntityRefs.products ?? []),

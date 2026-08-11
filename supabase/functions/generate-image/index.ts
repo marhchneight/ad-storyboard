@@ -102,26 +102,30 @@ function describeLocation(e: LocationEntity): string {
 
 function composeEntityAwarePrompt(
   style: string,
-  overallPrompt: string,
   visualBible: VisualBible,
   entityRefs: EntityRefs,
-  sceneDescription: string,
-  cameraDirection: string,
+  imagePrompt: string,
+  sceneDescriptionFallback: string,
+  cameraDirectionFallback: string,
   usingReference: boolean,
 ): string {
   const characters = (visualBible.characters ?? []).filter((c) => (entityRefs.characters ?? []).includes(c.id));
   const products = (visualBible.products ?? []).filter((p) => (entityRefs.products ?? []).includes(p.id));
   const location = (visualBible.locations ?? []).find((l) => l.id === entityRefs.location);
 
+  // imagePrompt is the English, model-facing field (see ai-director's language policy). Older cuts created
+  // before this field existed fall back to the (possibly Korean) display fields rather than sending nothing.
+  const sceneVisual = imagePrompt.trim().length > 0
+    ? imagePrompt.trim()
+    : [sceneDescriptionFallback.trim(), cameraDirectionFallback.trim()].filter((p) => p.length > 0).join(', ');
+
   const parts = [
     STYLE_MODIFIERS[style],
     visualBible.globalStyle,
-    overallPrompt.trim(),
     ...characters.map(describeCharacter),
     ...products.map(describeProduct),
     location ? describeLocation(location) : null,
-    sceneDescription.trim(),
-    cameraDirection.trim(),
+    sceneVisual,
     (entityRefs.characters?.length || entityRefs.products?.length)
       ? 'Preserve the exact identity, face, hairstyle, outfit, and packaging described above; only pose, ' +
         'action, framing, and camera angle should follow the scene description.'
@@ -268,8 +272,8 @@ Deno.serve(async (req) => {
     const size = IMAGE_SIZE_BY_ASPECT_RATIO[project.aspect_ratio as string] ?? '1024x1024';
     const referenceUrls = collectReferenceImageUrls(visualBible, entityRefs);
     const prompt = composeEntityAwarePrompt(
-      project.style, project.overall_prompt, visualBible, entityRefs, cut.scene_description, cut.camera_direction,
-      referenceUrls.length > 0,
+      project.style, visualBible, entityRefs, (cut.image_prompt as string) ?? '', cut.scene_description,
+      cut.camera_direction, referenceUrls.length > 0,
     );
 
     let b64: string;

@@ -12,6 +12,21 @@ const ENTITY_INSTRUCTIONS =
   '이 시점에 한 번만 합리적으로 결정하고, 이후 절대 다시 임의로 바꾸지 마세요. 실제 스토리상 새로운 인물/제품/' +
   '장소가 필요한 경우에만 새 id를 만드세요. 등장하지 않는 entity는 만들지 마세요.';
 
+const LANGUAGE_POLICY =
+  'Language policy: "concept", "creativeDirection", and every shot field except "imagePrompt" — "visual", ' +
+  '"action", "lighting", "mood", "location", "props", "dialogue", "sfx", "transition", "purpose", ' +
+  '"shotSize", "lens", "angle", "movement", "composition" — must be written in natural Korean, concise and ' +
+  'appropriate for a professional commercial storyboard used on a Korean production set. Do not translate ' +
+  'literally from English — write as a Korean production team actually would (e.g. "아이레벨 고정 숏" not ' +
+  '"카메라는 눈 높이에 위치하고 정적입니다", "30대 남성이 영양제를 들고 카메라를 바라본다" not a long descriptive ' +
+  'sentence). Industry-standard cinematography loanwords such as 클로즈업, 풀 숏, 아이레벨, 하이앵글, 로우앵글, ' +
+  '달리 인, 팬, 틸트, 핸드헬드 may be used naturally — do not force-translate them into pure Korean. Two kinds ' +
+  'of content are the exception and must always be written in English, regardless of the Korean fields above: ' +
+  '(1) every shot\'s "imagePrompt" — a concise, visually descriptive sentence for an image-generation model ' +
+  '(the scene\'s subject, action, and camera framing in one sentence); and (2) every field inside ' +
+  '"visualBible" (characters, products, locations) — these are internal model-facing definitions, never shown ' +
+  'to the end user. English and Korean fields must never influence each other\'s language.';
+
 const DIRECTOR_OUTPUT_CONTRACT =
   'Always respond with a single JSON object matching this exact shape, and nothing else: ' +
   '{"concept": string, "creativeDirection": string, ' +
@@ -28,12 +43,13 @@ const DIRECTOR_OUTPUT_CONTRACT =
   '"shotSize": string, "lens": string, "angle": string, "movement": string, "composition": string, ' +
   '"visual": string, "action": string, "lighting": string, "mood": string, "location": string, ' +
   '"props": string, "dialogue": string, "sfx": string, "transition": string, "purpose": string, ' +
-  '"characterIds": string[], "productIds": string[], "locationId": (string or null)}]}. ' +
-  '"visual" is the primary visual description of the shot (what the camera sees). "dialogue" is any spoken ' +
-  'line, copy, or voice-over for that shot (leave "" if silent). "duration" is seconds as a number. ' +
-  '"characterIds"/"productIds"/"locationId" must reference ids defined in "visualBible" — use [] / null when ' +
-  'no persistent entity applies to that shot. Keep "shots" in narrative order starting at shotNumber 1. Never ' +
-  'wrap the JSON in markdown code fences.';
+  '"imagePrompt": string, "characterIds": string[], "productIds": string[], "locationId": (string or null)}]}. ' +
+  '"visual" is the primary scene description, written for a Korean production team reading a shot list ' +
+  '(see language policy below). "dialogue" is any spoken line, copy, or voice-over for that shot (leave "" ' +
+  'if silent). "duration" is seconds as a number. "imagePrompt" is a separate English-only field for an ' +
+  'image-generation model (see language policy below). "characterIds"/"productIds"/"locationId" must ' +
+  'reference ids defined in "visualBible" — use [] / null when no persistent entity applies to that shot. ' +
+  'Keep "shots" in narrative order starting at shotNumber 1. Never wrap the JSON in markdown code fences.';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -66,6 +82,7 @@ interface DirectorShot {
   sfx: string;
   transition: string;
   purpose: string;
+  imagePrompt?: string;
   characterIds?: string[];
   productIds?: string[];
   locationId?: string | null;
@@ -169,12 +186,14 @@ const SHOTS_ONLY_OUTPUT_CONTRACT =
   '"shots": [{"shotNumber": number, "duration": number, "shotSize": string, "lens": string, "angle": string, ' +
   '"movement": string, "composition": string, "visual": string, "action": string, "lighting": string, ' +
   '"mood": string, "location": string, "props": string, "dialogue": string, "sfx": string, "transition": ' +
-  'string, "purpose": string, "characterIds": string[], "productIds": string[], "locationId": (string or ' +
-  'null)}]}. "visual" is the primary visual description of the shot (what the camera sees). "dialogue" is ' +
-  'any spoken line, copy, or voice-over for that shot (leave "" if silent). "duration" is seconds as a ' +
-  'number. "characterIds"/"productIds"/"locationId" must reference ids defined in "visualBible" — use [] / ' +
-  'null when no persistent entity applies. Keep "shots" in narrative order starting at shotNumber 1. Never ' +
-  'wrap the JSON in markdown code fences.';
+  'string, "purpose": string, "imagePrompt": string, "characterIds": string[], "productIds": string[], ' +
+  '"locationId": (string or null)}]}. "visual" is the primary scene description, written for a Korean ' +
+  'production team reading a shot list (see language policy below). "dialogue" is any spoken line, copy, or ' +
+  'voice-over for that shot (leave "" if silent). "duration" is seconds as a number. "imagePrompt" is a ' +
+  'separate English-only field for an image-generation model (see language policy below). ' +
+  '"characterIds"/"productIds"/"locationId" must reference ids defined in "visualBible" — use [] / null when ' +
+  'no persistent entity applies. Keep "shots" in narrative order starting at shotNumber 1. Never wrap the ' +
+  'JSON in markdown code fences.';
 
 interface Treatment {
   title: string;
@@ -285,6 +304,7 @@ Deno.serve(async (req) => {
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: DIRECTOR_SYSTEM_ROLE },
+            { role: 'system', content: LANGUAGE_POLICY },
             { role: 'user', content: userPrompt },
           ],
           response_format: { type: 'json_object' },
@@ -346,6 +366,7 @@ Deno.serve(async (req) => {
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: DIRECTOR_SYSTEM_ROLE },
+            { role: 'system', content: LANGUAGE_POLICY },
             { role: 'user', content: userPrompt },
           ],
           response_format: { type: 'json_object' },
@@ -403,7 +424,7 @@ Deno.serve(async (req) => {
         order_index: i,
         scene_description: shot.visual ?? '',
         dialogue: shot.dialogue ?? '',
-        camera_direction: [shot.angle, shot.movement].filter(Boolean).join(', '),
+        camera_direction: [shot.angle, shot.movement].filter(Boolean).join(' · '),
         duration_seconds: typeof shot.duration === 'number' ? shot.duration : null,
         shot_size: shot.shotSize ?? '',
         lens: shot.lens ?? '',
@@ -418,6 +439,7 @@ Deno.serve(async (req) => {
         sfx: shot.sfx ?? '',
         transition: shot.transition ?? '',
         purpose: shot.purpose ?? '',
+        image_prompt: shot.imagePrompt ?? '',
         entity_refs: {
           characters: Array.isArray(shot.characterIds) ? shot.characterIds : [],
           products: Array.isArray(shot.productIds) ? shot.productIds : [],
