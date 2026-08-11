@@ -10,7 +10,31 @@ const OUTPUT_CONTRACT =
   '{"shot": {"duration": number, "shotSize": string, "lens": string, "angle": string, "movement": string, ' +
   '"composition": string, "visual": string, "action": string, "lighting": string, "mood": string, ' +
   '"location": string, "props": string, "dialogue": string, "sfx": string, "transition": string, ' +
-  '"purpose": string}}. Never wrap the JSON in markdown code fences.';
+  '"purpose": string, "characterIds": string[], "productIds": string[], "locationId": (string or null)}}. ' +
+  '"characterIds"/"productIds"/"locationId" must reference the persistent entity ids listed below and must ' +
+  'stay exactly the same as the current shot\'s ids unless the edit instruction explicitly changes which ' +
+  'entity appears in this shot. Never invent a new entity id. Never wrap the JSON in markdown code fences.';
+
+interface VisualBibleSummaryEntity {
+  id: string;
+  label: string;
+}
+
+interface VisualBibleForSummary {
+  characters?: VisualBibleSummaryEntity[];
+  products?: VisualBibleSummaryEntity[];
+  locations?: VisualBibleSummaryEntity[];
+}
+
+function summarizeVisualBible(bible: VisualBibleForSummary): string {
+  const fmt = (items?: VisualBibleSummaryEntity[]) => (items ?? []).map((e) => `${e.id}: ${e.label}`).join('; ');
+  const parts = [
+    bible.characters?.length ? `Characters: ${fmt(bible.characters)}` : null,
+    bible.products?.length ? `Products: ${fmt(bible.products)}` : null,
+    bible.locations?.length ? `Locations: ${fmt(bible.locations)}` : null,
+  ].filter((p): p is string => !!p);
+  return parts.length > 0 ? parts.join('\n') : '(no persistent entities defined for this project)';
+}
 
 const QUICK_ACTION_INSTRUCTIONS: Record<string, string> = {
   reframe: 'Reframe this shot with a different, more interesting composition.',
@@ -53,6 +77,9 @@ interface RevisedShot {
   sfx: string;
   transition: string;
   purpose: string;
+  characterIds?: string[];
+  productIds?: string[];
+  locationId?: string | null;
 }
 
 function isValidShot(value: unknown): value is { shot: RevisedShot } {
@@ -116,9 +143,16 @@ Deno.serve(async (req) => {
       purpose: cut.purpose,
     };
 
+    const visualBible = (project.visual_bible as VisualBibleForSummary) ?? {};
+    const currentEntityRefs = (cut.entity_refs as { characters?: string[]; products?: string[]; location?: string | null }) ?? {};
+
     const userPrompt = `${OUTPUT_CONTRACT}\n\n` +
       `Product / concept (do not change): ${project.overall_prompt}\n\n` +
-      `Current shot:\n${JSON.stringify(currentShot)}\n\n` +
+      `Persistent project entities (visual definitions live elsewhere and must not be altered by this edit):\n` +
+      `${summarizeVisualBible(visualBible)}\n\n` +
+      `Current shot (currently references characterIds=${JSON.stringify(currentEntityRefs.characters ?? [])}, ` +
+      `productIds=${JSON.stringify(currentEntityRefs.products ?? [])}, ` +
+      `locationId=${JSON.stringify(currentEntityRefs.location ?? null)}):\n${JSON.stringify(currentShot)}\n\n` +
       `Edit instruction: ${editInstruction}`;
 
     const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -176,6 +210,13 @@ Deno.serve(async (req) => {
       sfx: shot.sfx ?? '',
       transition: shot.transition ?? '',
       purpose: shot.purpose ?? '',
+      entity_refs: {
+        characters: Array.isArray(shot.characterIds) ? shot.characterIds : (currentEntityRefs.characters ?? []),
+        products: Array.isArray(shot.productIds) ? shot.productIds : (currentEntityRefs.products ?? []),
+        location: (typeof shot.locationId === 'string' || shot.locationId === null)
+          ? shot.locationId
+          : (currentEntityRefs.location ?? null),
+      },
       image_url: null,
       generation_status: 'idle',
     }).eq('id', cutId);
