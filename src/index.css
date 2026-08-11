@@ -396,10 +396,15 @@ a.btn-primary {
 .cut-cell textarea,
 .cut-cell input {
   width: 100%;
+  min-width: 160px;
 }
 
 .cut-cell-actions {
   width: 112px;
+}
+
+.cut-cell-actions:has(.shot-ai-edit[open]) {
+  width: 240px;
 }
 
 .cut-cell-actions .btn-text,
@@ -436,6 +441,10 @@ a.btn-primary {
   width: 140px;
 }
 
+.cut-cell-details:has(details[open]) {
+  width: 320px;
+}
+
 .shot-details-empty {
   color: #999999;
   font-size: 0.85rem;
@@ -455,21 +464,23 @@ a.btn-primary {
 
 .shot-details-row {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   font-size: 0.78rem;
-  padding: 3px 0;
+  padding: 5px 0;
   border-bottom: 1px solid #F0EEE9;
 }
 
 .shot-details-row dt {
-  color: #666666;
-  white-space: nowrap;
+  color: #999999;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .shot-details-row dd {
   margin: 0;
-  text-align: right;
+  text-align: left;
   color: #111111;
 }
 
@@ -528,10 +539,15 @@ a.btn-primary {
 }
 
 .shot-ai-quick-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
   margin: 8px 0;
+}
+
+.shot-ai-quick-actions .btn-small {
+  padding: 6px 8px;
+  white-space: nowrap;
 }
 
 .shot-ai-instruction-form {
