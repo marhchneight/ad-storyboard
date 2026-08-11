@@ -1,6 +1,19 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { buildStoryboardPdf } from './pdfExport';
 import type { Project, Cut } from '../types';
+
+// Real font bytes (not a stub) so jsPDF's TTF parsing succeeds when tests
+// stub out `fetch` for the Korean font request in pdfExport.ts.
+const koreanFontPath = fileURLToPath(new URL('../../public/fonts/Pretendard-Regular.ttf', import.meta.url));
+const koreanFontBuffer = readFileSync(koreanFontPath);
+function koreanFontArrayBuffer(): ArrayBuffer {
+  return koreanFontBuffer.buffer.slice(
+    koreanFontBuffer.byteOffset,
+    koreanFontBuffer.byteOffset + koreanFontBuffer.byteLength,
+  ) as ArrayBuffer;
+}
 
 const project: Project = {
   id: 'p1', user_id: 'u1', title: '테스트 프로젝트', style: 'sketch', aspect_ratio: '1:1',
@@ -74,6 +87,9 @@ describe('buildStoryboardPdf', () => {
 
   it('embeds a fetched image into the PDF for cuts that have an image_url', async () => {
     const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/fonts/Pretendard-Regular.ttf') {
+        return { arrayBuffer: async () => koreanFontArrayBuffer() } as unknown as Response;
+      }
       expect(url).toBe('https://example.com/cut-1.png');
       return {
         blob: async () => tinyPngBlob(),
