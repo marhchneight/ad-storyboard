@@ -25,7 +25,11 @@ const LANGUAGE_POLICY =
   'and appropriate for a professional commercial storyboard used on a Korean production set. Do not ' +
   'translate literally from English — write as a Korean production team actually would (e.g. "아이레벨 고정 ' +
   '숏" not "카메라는 눈 높이에 위치하고 정적입니다"). Industry-standard cinematography loanwords such as 클로즈업, ' +
-  '풀 숏, 아이레벨, 하이앵글, 로우앵글, 달리 인, 팬, 틸트, 핸드헬드 may be used naturally. "imagePrompt" is the ' +
+  '풀 숏, 아이레벨, 하이앵글, 로우앵글, 달리 인, 팬, 틸트, 핸드헬드 may be used naturally. The "angle" and ' +
+  '"movement" fields are especially prone to slipping into English shorthand — write them ONLY as short ' +
+  'Korean phrases, e.g. angle: "하이앵글", "로우앵글", "아이레벨" (never "high angle", "low angle", "eye level"); ' +
+  'movement: "천천히 틸트 다운", "고정", "핸드헬드로 살짝 흔들림", "달리 인" (never "slow tilt down", "steady", ' +
+  '"static", "handheld"). "imagePrompt" is the ' +
   'only exception — it must always be a concise English sentence describing exactly what the camera should ' +
   'see (subject, action, framing/angle), written for an image-generation model, and must never affect the ' +
   'language of any other field.';

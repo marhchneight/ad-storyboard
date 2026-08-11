@@ -20,7 +20,7 @@ export function fileToDataUrl(file: File): Promise<string> {
 
 /** Analyzes a reference (image data URL / remote image URL, or a text description) into a Creative DNA profile. */
 export async function analyzeCreativeDna(
-  projectId: string,
+  projectId: string | undefined,
   input: { imageUrl?: string; textDescription?: string }
 ): Promise<CreativeDna> {
   const headers = await authHeader();

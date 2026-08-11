@@ -65,22 +65,22 @@ Deno.serve(async (req) => {
 
   try {
     const { projectId, imageUrl, textDescription } = await req.json();
-    if (!projectId) return jsonResponse({ error: 'projectId required' }, 400);
     if (!imageUrl && !textDescription) {
       return jsonResponse({ error: 'imageUrl or textDescription required' }, 400);
     }
-
-    const { data: project, error: projectError } = await supabase
-      .from('projects').select('*').eq('id', projectId).single();
-    if (projectError || !project) return jsonResponse({ error: 'project not found' }, 404);
 
     const authHeader = req.headers.get('Authorization') ?? '';
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
     if (!token) return jsonResponse({ error: 'unauthorized' }, 401);
 
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !userData?.user || userData.user.id !== project.user_id) {
-      return jsonResponse({ error: 'forbidden' }, 403);
+    if (userError || !userData?.user) return jsonResponse({ error: 'unauthorized' }, 401);
+
+    if (projectId) {
+      const { data: project, error: projectError } = await supabase
+        .from('projects').select('*').eq('id', projectId).single();
+      if (projectError || !project) return jsonResponse({ error: 'project not found' }, 404);
+      if (userData.user.id !== project.user_id) return jsonResponse({ error: 'forbidden' }, 403);
     }
 
     const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
@@ -129,7 +129,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'AI가 올바른 형식의 분석 결과를 반환하지 않았습니다. 다시 시도해주세요.' }, 502);
     }
 
-    await supabase.from('projects').update({ creative_dna: parsed }).eq('id', projectId);
+    if (projectId) {
+      await supabase.from('projects').update({ creative_dna: parsed }).eq('id', projectId);
+    }
 
     return jsonResponse({ dna: parsed }, 200);
   } catch (err) {

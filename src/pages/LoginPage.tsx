@@ -26,26 +26,26 @@ export default function LoginPage() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <p className="eyebrow">Ad Storyboard</p>
-        <h1>광고 콘티 스토리보드</h1>
+        <p className="eyebrow">Ad Storyboard Studio</p>
+        <h1>Welcome back.</h1>
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="field">
-            <span className="field-label">이메일</span>
+            <span className="field-label">Email</span>
             <input type="email" placeholder="you@example.com" value={email}
               onChange={(e) => setEmail(e.target.value)} required />
           </div>
           <div className="field">
-            <span className="field-label">비밀번호</span>
-            <input type="password" placeholder="6자 이상" value={password}
+            <span className="field-label">Password</span>
+            <input type="password" placeholder="6+ characters" value={password}
               onChange={(e) => setPassword(e.target.value)} required minLength={6} />
           </div>
           {error && <p className="error">{error}</p>}
           <button type="submit" className="btn-primary btn-block">
-            {mode === 'signin' ? '로그인' : '회원가입'}
+            {mode === 'signin' ? 'Log in' : 'Sign up'}
           </button>
         </form>
         <button type="button" className="btn-text" onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}>
-          {mode === 'signin' ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인'}
+          {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
         </button>
       </div>
     </div>

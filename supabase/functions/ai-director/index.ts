@@ -23,7 +23,11 @@ const LANGUAGE_POLICY =
   'literally from English — write as a Korean production team actually would (e.g. "아이레벨 고정 숏" not ' +
   '"카메라는 눈 높이에 위치하고 정적입니다", "30대 남성이 영양제를 들고 카메라를 바라본다" not a long descriptive ' +
   'sentence). Industry-standard cinematography loanwords such as 클로즈업, 풀 숏, 아이레벨, 하이앵글, 로우앵글, ' +
-  '달리 인, 팬, 틸트, 핸드헬드 may be used naturally — do not force-translate them into pure Korean. Two kinds ' +
+  '달리 인, 팬, 틸트, 핸드헬드 may be used naturally — do not force-translate them into pure Korean. The "angle" ' +
+  'and "movement" fields are especially prone to slipping into English shorthand — write them ONLY as short ' +
+  'Korean phrases, e.g. angle: "하이앵글", "로우앵글", "아이레벨" (never "high angle", "low angle", "eye level"); ' +
+  'movement: "천천히 틸트 다운", "고정", "핸드헬드로 살짝 흔들림", "달리 인" (never "slow tilt down", "steady", ' +
+  '"static", "handheld"). Two kinds ' +
   'of content are the exception and must always be written in English, regardless of the Korean fields above: ' +
   '(1) every shot\'s "imagePrompt" — a concise, visually descriptive sentence for an image-generation model ' +
   '(the scene\'s subject, action, and camera framing in one sentence); and (2) every field inside ' +
@@ -239,6 +243,92 @@ function buildCopySection(copyText: unknown): string {
     `적절한 샷 수와 다르면 자연스럽게 나누거나 합쳐서 배치하세요.\n카피 원본:\n${copyText.trim()}`;
 }
 
+function buildSceneCountInstruction(
+  sceneCountMode: unknown,
+  requestedSceneCount: unknown,
+  targetDurationSeconds: unknown,
+  copyText: unknown,
+): string {
+  if (sceneCountMode === 'manual' && typeof requestedSceneCount === 'number' && requestedSceneCount >= 2) {
+    return `\n\n중요: 이 스토리보드는 정확히 ${requestedSceneCount}개의 장면(scene)으로 구성되어야 합니다. Generate ` +
+      `exactly ${requestedSceneCount} storyboard scenes — this is a hard requirement, not a suggestion. 단순히 ` +
+      `장면을 쪼개거나 합쳐서 개수만 맞추지 말고, 전체 광고의 이야기 흐름을 처음부터 ${requestedSceneCount}개 장면에 ` +
+      `맞게 재구성하세요. 각 장면은 의미 있는 역할을 가져야 합니다.`;
+  }
+  if (sceneCountMode === 'duration' && typeof targetDurationSeconds === 'number') {
+    const copyNote = (typeof copyText === 'string' && copyText.trim())
+      ? ' 사용자가 업로드한 카피 원본의 분량도 함께 고려해서, 핵심 카피를 우선 배치하고 대사가 부족하거나 넘치지 ' +
+        '않도록 장면 수와 각 장면의 길이를 조정하세요.'
+      : '';
+    return `\n\n중요: 이 광고의 목표 길이는 ${targetDurationSeconds}초입니다. Create a storyboard whose number of ` +
+      `scenes and pacing are appropriate for the requested duration. Do not simply maximize the number of ` +
+      `scenes. Each scene should have enough screen time for the intended action, dialogue, copy, and visual ` +
+      `communication. 정보 전달이 필요한 광고와 감성적인 브랜드 필름은 같은 길이라도 적절한 장면 수가 다를 수 ` +
+      `있습니다 — 광고 유형과 아이디어 내용에 맞게 판단하세요. 각 샷의 "duration" 합이 대략 ${targetDurationSeconds}초 ` +
+      `(오차 ±3초 이내)가 되도록 장면 수와 pacing을 결정하세요.${copyNote}`;
+  }
+  return '';
+}
+
+interface ShotsOnlyResult {
+  shots: DirectorShot[];
+  visualBible: VisualBible;
+}
+
+async function fetchShotsOnly(userPrompt: string): Promise<ShotsOnlyResult | { error: string }> {
+  const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: DIRECTOR_SYSTEM_ROLE },
+        { role: 'system', content: LANGUAGE_POLICY },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: { type: 'json_object' },
+    }),
+  });
+
+  if (!openaiRes.ok) {
+    const errText = await openaiRes.text();
+    return { error: `openai error: ${errText}` };
+  }
+
+  const openaiJson = await openaiRes.json();
+  const content = openaiJson.choices?.[0]?.message?.content;
+  if (!content) return { error: 'empty AI response' };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    console.error('shots-only JSON.parse failed', {
+      finishReason: openaiJson.choices?.[0]?.finish_reason,
+      contentLength: content.length,
+      contentTail: content.slice(-300),
+    });
+    return { error: 'AI 응답을 해석할 수 없습니다. 다시 시도해주세요.' };
+  }
+
+  if (!isValidShotsOnly(parsed)) {
+    const p = parsed as Record<string, unknown>;
+    console.error('shots-only validation failed', {
+      finishReason: openaiJson.choices?.[0]?.finish_reason,
+      hasShots: Array.isArray(p.shots),
+      shotsLength: Array.isArray(p.shots) ? p.shots.length : null,
+      firstShot: Array.isArray(p.shots) ? p.shots[0] : null,
+      keys: Object.keys(p),
+    });
+    return { error: 'AI가 올바른 형식의 샷 리스트를 반환하지 않았습니다. 다시 시도해주세요.' };
+  }
+
+  return parsed;
+}
+
 function buildBriefSummary(brief: Record<string, unknown>, freeformIdea: string): string {
   const lines: string[] = [];
   if (freeformIdea.trim()) lines.push(`Free-form idea: ${freeformIdea.trim()}`);
@@ -272,7 +362,10 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { title, style, brief, freeformIdea, creativeDirection, copyText, aspectRatio } = await req.json();
+    const {
+      title, style, brief, freeformIdea, creativeDirection, copyText, aspectRatio,
+      sceneCountMode, requestedSceneCount, targetDurationSeconds,
+    } = await req.json();
     if (!title || typeof title !== 'string') return jsonResponse({ error: 'title required' }, 400);
     if (!style || !['sketch', 'animation', 'live_action'].includes(style)) {
       return jsonResponse({ error: 'valid style required' }, 400);
@@ -299,6 +392,9 @@ Deno.serve(async (req) => {
 
     if (treatment) {
       const briefSummary = buildBriefSummary(brief ?? {}, freeformIdea ?? '');
+      const sceneCountInstruction = buildSceneCountInstruction(
+        sceneCountMode, requestedSceneCount, targetDurationSeconds, copyText
+      );
       const userPrompt = `${SHOTS_ONLY_OUTPUT_CONTRACT}\n\n${ENTITY_INSTRUCTIONS}\n\n다음은 광고 브리프입니다:\n${briefSummary}\n\n` +
         `다음은 클라이언트가 이미 승인한 Creative Direction입니다. 이 방향을 그대로 실행하는 샷 리스트를 ` +
         `만드세요(방향을 새로 해석하지 마세요):\n제목: ${treatment.title}\n컨셉: ${treatment.concept}\n` +
@@ -306,62 +402,33 @@ Deno.serve(async (req) => {
         `길이: ${treatment.approach.duration ?? '미지정'}초, 예상 샷 수: ${treatment.approach.estimatedShots ?? '미지정'}, ` +
         `대사 스타일: ${treatment.approach.dialogueStyle}, 제품 노출: ${treatment.approach.productReveal}, ` +
         `카메라 스타일: ${treatment.approach.cameraStyle}\n` +
-        `각 샷은 실제 촬영에 바로 쓸 수 있을 만큼 구체적이어야 합니다.${buildCopySection(copyText)}`;
+        `각 샷은 실제 촬영에 바로 쓸 수 있을 만큼 구체적이어야 합니다.${sceneCountInstruction}${buildCopySection(copyText)}`;
 
-      const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: DIRECTOR_SYSTEM_ROLE },
-            { role: 'system', content: LANGUAGE_POLICY },
-            { role: 'user', content: userPrompt },
-          ],
-          response_format: { type: 'json_object' },
-        }),
-      });
+      let shotsResult = await fetchShotsOnly(userPrompt);
+      if ('error' in shotsResult) return jsonResponse({ error: shotsResult.error }, 502);
 
-      if (!openaiRes.ok) {
-        const errText = await openaiRes.text();
-        return jsonResponse({ error: `openai error: ${errText}` }, 502);
+      const manualCountRequired = sceneCountMode === 'manual' && typeof requestedSceneCount === 'number' &&
+        requestedSceneCount >= 2;
+
+      if (manualCountRequired && shotsResult.shots.length !== requestedSceneCount) {
+        const retryPrompt = `${userPrompt}\n\n중요: 방금 생성한 응답은 ${shotsResult.shots.length}개의 장면이었지만, ` +
+          `반드시 정확히 ${requestedSceneCount}개여야 합니다. 전체 이야기 구조를 ${requestedSceneCount}개 장면에 맞게 ` +
+          `다시 설계해서 정확히 ${requestedSceneCount}개의 shots로 응답하세요.`;
+        const retryResult = await fetchShotsOnly(retryPrompt);
+        if (!('error' in retryResult)) shotsResult = retryResult;
       }
 
-      const openaiJson = await openaiRes.json();
-      const content = openaiJson.choices?.[0]?.message?.content;
-      if (!content) return jsonResponse({ error: 'empty AI response' }, 502);
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(content);
-      } catch {
-        console.error('shots-only JSON.parse failed', {
-          finishReason: openaiJson.choices?.[0]?.finish_reason,
-          contentLength: content.length,
-          contentTail: content.slice(-300),
-        });
-        return jsonResponse({ error: 'AI 응답을 해석할 수 없습니다. 다시 시도해주세요.' }, 502);
-      }
-
-      if (!isValidShotsOnly(parsed)) {
-        const p = parsed as Record<string, unknown>;
-        console.error('shots-only validation failed', {
-          finishReason: openaiJson.choices?.[0]?.finish_reason,
-          hasShots: Array.isArray(p.shots),
-          shotsLength: Array.isArray(p.shots) ? p.shots.length : null,
-          firstShot: Array.isArray(p.shots) ? p.shots[0] : null,
-          keys: Object.keys(p),
-        });
-        return jsonResponse({ error: 'AI가 올바른 형식의 샷 리스트를 반환하지 않았습니다. 다시 시도해주세요.' }, 502);
+      if (manualCountRequired && shotsResult.shots.length !== requestedSceneCount) {
+        return jsonResponse(
+          { error: `AI가 요청한 ${requestedSceneCount}개의 컷을 정확히 생성하지 못했습니다. 다시 시도해주세요.` },
+          502
+        );
       }
 
       concept = treatment.concept;
       creativeDirectionText = treatment.creativeDirection;
-      shots = parsed.shots;
-      visualBible = parsed.visualBible;
+      shots = shotsResult.shots;
+      visualBible = shotsResult.visualBible;
     } else {
       const briefSummary = buildBriefSummary(brief ?? {}, freeformIdea ?? '');
 

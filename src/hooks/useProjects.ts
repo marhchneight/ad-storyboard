@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import type { CreativeBrief, Project, StoryboardStyle } from '../types';
+import type { AspectRatio, CreativeBrief, CreativeTreatment, Project, SceneCountMode, StoryboardStyle } from '../types';
 
 export async function createProject(input: {
   title: string;
@@ -47,8 +47,14 @@ export async function createProject(input: {
 export async function directStoryboard(input: {
   title: string;
   style: StoryboardStyle;
+  aspectRatio?: AspectRatio;
   brief: CreativeBrief;
   freeformIdea: string;
+  creativeDirection?: CreativeTreatment;
+  copyText?: string;
+  sceneCountMode?: SceneCountMode;
+  requestedSceneCount?: number;
+  targetDurationSeconds?: number;
 }): Promise<string> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
@@ -60,8 +66,14 @@ export async function directStoryboard(input: {
     body: JSON.stringify({
       title: input.title,
       style: input.style,
+      aspectRatio: input.aspectRatio,
       brief: input.brief,
       freeformIdea: input.freeformIdea,
+      creativeDirection: input.creativeDirection,
+      copyText: input.copyText,
+      sceneCountMode: input.sceneCountMode,
+      requestedSceneCount: input.requestedSceneCount,
+      targetDurationSeconds: input.targetDurationSeconds,
     }),
   });
 

@@ -3,8 +3,9 @@ import { buildStoryboardPdf } from './pdfExport';
 import type { Project, Cut } from '../types';
 
 const project: Project = {
-  id: 'p1', user_id: 'u1', title: '테스트 프로젝트', style: 'sketch',
-  overall_prompt: '콘셉트', brief: {}, creative_direction: '', creative_dna: null, created_at: '', updated_at: '',
+  id: 'p1', user_id: 'u1', title: '테스트 프로젝트', style: 'sketch', aspect_ratio: '1:1',
+  overall_prompt: '콘셉트', brief: {}, creative_direction: '', creative_dna: null, creative_treatment: null,
+  created_at: '', updated_at: '',
 };
 
 const shotDetailDefaults = {

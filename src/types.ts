@@ -1,7 +1,10 @@
 export type StoryboardStyle = 'sketch' | 'animation' | 'live_action';
+export type AspectRatio = '1:1' | '9:16' | '16:9';
 export type GenerationStatus = 'idle' | 'generating' | 'done' | 'failed';
 export type Platform = 'Instagram Reels' | 'TikTok' | 'YouTube' | 'TVC' | 'Digital Ad' | 'Brand Film';
 export type Duration = '6s' | '15s' | '30s' | '60s' | 'Custom';
+export type SceneCountMode = 'manual' | 'duration';
+export type TargetDurationSeconds = 15 | 30 | 60;
 
 export interface CreativeBrief {
   product?: string;
@@ -31,15 +34,39 @@ export interface CreativeDna {
   creativePrinciples: string[];
 }
 
+export interface CreativeTreatmentApproach {
+  duration: number | null;
+  estimatedShots: number | null;
+  dialogueStyle: string;
+  productReveal: string;
+  cameraStyle: string;
+}
+
+export interface CreativeTreatment {
+  title: string;
+  concept: string;
+  creativeDirection: string;
+  visualLanguage: string[];
+  approach: CreativeTreatmentApproach;
+  creativePrinciples: string[];
+}
+
+export interface CreativeConcept {
+  title: string;
+  concept: string;
+}
+
 export interface Project {
   id: string;
   user_id: string;
   title: string;
   style: StoryboardStyle;
+  aspect_ratio: AspectRatio;
   overall_prompt: string;
   brief: CreativeBrief;
   creative_direction: string;
   creative_dna: CreativeDna | null;
+  creative_treatment: CreativeTreatment | null;
   created_at: string;
   updated_at: string;
 }

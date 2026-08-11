@@ -22,7 +22,7 @@ export default function ProjectListPage() {
     <div className="page-shell">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Ad Storyboard</p>
+          <Link to="/" className="btn-text back-link">← Studio</Link>
           <h1>내 스토리보드</h1>
         </div>
         <div className="page-header-actions">

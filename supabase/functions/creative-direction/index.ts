@@ -100,6 +100,38 @@ function buildBriefSummary(brief: Record<string, unknown>, freeformIdea: string)
   return lines.length > 0 ? lines.join('\n') : '(브리프 정보 없음 — 자유롭게 해석하세요)';
 }
 
+function buildSceneCountNote(
+  sceneCountMode: unknown,
+  requestedSceneCount: unknown,
+  targetDurationSeconds: unknown,
+): string {
+  if (sceneCountMode === 'manual' && typeof requestedSceneCount === 'number' && requestedSceneCount >= 2) {
+    return `\n\n이 광고는 정확히 ${requestedSceneCount}개의 샷(장면)으로 구성되어야 합니다. "approach.estimatedShots"는 ` +
+      `반드시 ${requestedSceneCount}로 설정하고, 컨셉과 트리트먼트 전체를 이 장면 수에 맞게 설계하세요.`;
+  }
+  if (sceneCountMode === 'duration' && typeof targetDurationSeconds === 'number') {
+    return `\n\n이 광고의 목표 길이는 ${targetDurationSeconds}초입니다. "approach.duration"은 ${targetDurationSeconds}로 ` +
+      `설정하고, "approach.estimatedShots"는 이 길이와 광고 유형(정보 전달이 필요한 광고인지, 감성적인 브랜드 필름인지 등)에 ` +
+      `맞는 현실적인 샷 수로 스스로 판단하세요. 무조건 샷 수를 최대화하지 마세요.`;
+  }
+  return '';
+}
+
+function applySceneCountOverride(
+  treatment: Treatment,
+  sceneCountMode: unknown,
+  requestedSceneCount: unknown,
+  targetDurationSeconds: unknown,
+): Treatment {
+  if (sceneCountMode === 'manual' && typeof requestedSceneCount === 'number' && requestedSceneCount >= 2) {
+    return { ...treatment, approach: { ...treatment.approach, estimatedShots: requestedSceneCount } };
+  }
+  if (sceneCountMode === 'duration' && typeof targetDurationSeconds === 'number') {
+    return { ...treatment, approach: { ...treatment.approach, duration: targetDurationSeconds } };
+  }
+  return treatment;
+}
+
 function summarizeDna(dna: Record<string, unknown> | undefined): string {
   if (!dna) return '';
   const parts: string[] = [];
@@ -131,15 +163,19 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user) return jsonResponse({ error: 'unauthorized' }, 401);
 
-    const { mode, freeformIdea, brief, dna, previousTreatment, instruction } = await req.json();
+    const {
+      mode, freeformIdea, brief, dna, previousTreatment, instruction,
+      sceneCountMode, requestedSceneCount, targetDurationSeconds,
+    } = await req.json();
     const resolvedMode = mode === 'revise' || mode === 'regenerate' ? mode : 'generate';
+    const sceneCountNote = buildSceneCountNote(sceneCountMode, requestedSceneCount, targetDurationSeconds);
 
     let userPrompt: string;
 
     if (resolvedMode === 'generate') {
       const briefSummary = buildBriefSummary(brief ?? {}, freeformIdea ?? '');
       userPrompt = `${OUTPUT_CONTRACT}\n\n다음은 광고 브리프입니다:\n${briefSummary}${summarizeDna(dna)}\n\n` +
-        `이 브리프에 대한 Creative Direction(연출 트리트먼트) 하나를 제안하세요.`;
+        `이 브리프에 대한 Creative Direction(연출 트리트먼트) 하나를 제안하세요.${sceneCountNote}`;
     } else if (resolvedMode === 'regenerate') {
       const briefSummary = buildBriefSummary(brief ?? {}, freeformIdea ?? '');
       const prevTitle = typeof previousTreatment?.title === 'string' ? previousTreatment.title : '';
@@ -147,7 +183,7 @@ Deno.serve(async (req) => {
       userPrompt = `${OUTPUT_CONTRACT}\n\n다음은 광고 브리프입니다:\n${briefSummary}${summarizeDna(dna)}\n\n` +
         `이전에 다음과 같은 방향을 제안했습니다: "${prevTitle}" — ${prevConcept}\n` +
         `이번에는 완전히 다른 창의적 해석의 Creative Direction을 새로 제안하세요. 같은 제품/메시지는 유지하되 ` +
-        `톤, 배경, 접근 방식은 이전과 뚜렷하게 달라야 합니다.`;
+        `톤, 배경, 접근 방식은 이전과 뚜렷하게 달라야 합니다.${sceneCountNote}`;
     } else {
       if (!previousTreatment || typeof previousTreatment !== 'object') {
         return jsonResponse({ error: 'previousTreatment required for revise' }, 400);
@@ -197,7 +233,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'AI가 올바른 형식의 연출 방향을 반환하지 않았습니다. 다시 시도해주세요.' }, 502);
     }
 
-    return jsonResponse({ treatment: parsed }, 200);
+    const treatment = applySceneCountOverride(parsed, sceneCountMode, requestedSceneCount, targetDurationSeconds);
+
+    return jsonResponse({ treatment }, 200);
   } catch (err) {
     return jsonResponse({ error: String(err) }, 500);
   }
