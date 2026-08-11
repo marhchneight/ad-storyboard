@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Cut } from '../types';
 import { downloadCutImage } from '../lib/pdfExport';
 import { editShot, SHOT_QUICK_ACTIONS, type ShotQuickAction } from '../lib/directorApi';
@@ -19,6 +20,7 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
   const [error, setError] = useState<string | null>(null);
   const [aiInstruction, setAiInstruction] = useState('');
   const [aiEditing, setAiEditing] = useState(false);
+  const [showLightbox, setShowLightbox] = useState(false);
 
   async function handleQuickAction(action: ShotQuickAction) {
     setError(null);
@@ -89,7 +91,7 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
           </div>
         )}
         {cut.image_url && (
-          <button type="button" onClick={handleDownload} className="btn-text cut-download-btn">다운로드</button>
+          <button type="button" onClick={() => setShowLightbox(true)} className="btn-text cut-view-large-btn">크게 보기</button>
         )}
         {cut.generation_status === 'failed' && (
           <p className="error">생성 실패</p>
@@ -99,6 +101,13 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
         )}
         {cut.generation_status === 'failed' && (
           <button className="btn-secondary btn-small" onClick={handleGenerate}>다시 시도</button>
+        )}
+        {showLightbox && cut.image_url && createPortal(
+          <div className="image-lightbox-overlay" onClick={() => setShowLightbox(false)}>
+            <button type="button" className="image-lightbox-close" onClick={() => setShowLightbox(false)} aria-label="닫기">×</button>
+            <img src={cut.image_url} alt={`컷 ${index + 1} 크게 보기`} onClick={(e) => e.stopPropagation()} />
+          </div>,
+          document.body,
         )}
       </td>
       <td className="cut-cell">
@@ -115,9 +124,6 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
       </td>
       <td className="cut-cell cut-cell-details">
         <ShotDetails cut={cut} />
-      </td>
-      <td className="cut-cell cut-cell-actions">
-        <button type="button" className="btn-text" onClick={handleRemove}>삭제</button>
         <details className="shot-ai-edit">
           <summary>AI 수정</summary>
           <div className="shot-ai-quick-actions">
@@ -137,6 +143,12 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
           </form>
         </details>
         {error && <p className="error">{error}</p>}
+      </td>
+      <td className="cut-cell cut-cell-actions">
+        <button type="button" className="btn-text" onClick={handleRemove}>삭제</button>
+        {cut.image_url && (
+          <button type="button" onClick={handleDownload} className="btn-text cut-download-btn">다운로드</button>
+        )}
       </td>
     </>
   );

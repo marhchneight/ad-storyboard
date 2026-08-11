@@ -388,6 +388,7 @@ a.btn-primary {
   font-size: 0.8rem;
 }
 
+.cut-view-large-btn,
 .cut-download-btn {
   display: block;
   margin-bottom: 8px;
@@ -400,11 +401,11 @@ a.btn-primary {
 }
 
 .cut-cell-actions {
-  width: 112px;
-}
-
-.cut-cell-actions:has(.shot-ai-edit[open]) {
-  width: 240px;
+  width: 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
 }
 
 .cut-cell-actions .btn-text,
@@ -675,6 +676,41 @@ a.btn-primary {
   padding-left: 18px;
   font-size: 0.85rem;
   color: #111111;
+}
+
+/* Image lightbox */
+
+.image-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(17, 17, 17, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  z-index: 1000;
+  cursor: zoom-out;
+}
+
+.image-lightbox-overlay img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  cursor: default;
+}
+
+.image-lightbox-close {
+  position: absolute;
+  top: 24px;
+  right: 32px;
+  background: none;
+  border: none;
+  color: #FFFFFF;
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
 }
 
 /* Long text safety */
