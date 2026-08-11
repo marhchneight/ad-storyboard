@@ -10,7 +10,10 @@ const ENTITY_INSTRUCTIONS =
   '"character_a", "product_a", "location_a"처럼 프로젝트 내에서 고유한 짧은 id를 부여하고, 이후 모든 샷에서 ' +
   '동일한 id로 참조하세요. 사용자가 명시하지 않은 속성(나이대, 헤어스타일, 의상, 제품 패키지 디자인 등)은 ' +
   '이 시점에 한 번만 합리적으로 결정하고, 이후 절대 다시 임의로 바꾸지 마세요. 실제 스토리상 새로운 인물/제품/' +
-  '장소가 필요한 경우에만 새 id를 만드세요. 등장하지 않는 entity는 만들지 마세요.';
+  '장소가 필요한 경우에만 새 id를 만드세요. 등장하지 않는 entity는 만들지 마세요. ' +
+  'IMPORTANT: even though this instruction is in Korean, every field you write inside "visualBible" itself ' +
+  '(labels, descriptions, all attributes) must be written in English — these are internal, model-facing ' +
+  'definitions, not shown to the end user.';
 
 const LANGUAGE_POLICY =
   'Language policy: "concept", "creativeDirection", and every shot field except "imagePrompt" — "visual", ' +
@@ -44,12 +47,15 @@ const DIRECTOR_OUTPUT_CONTRACT =
   '"visual": string, "action": string, "lighting": string, "mood": string, "location": string, ' +
   '"props": string, "dialogue": string, "sfx": string, "transition": string, "purpose": string, ' +
   '"imagePrompt": string, "characterIds": string[], "productIds": string[], "locationId": (string or null)}]}. ' +
-  '"visual" is the primary scene description, written for a Korean production team reading a shot list ' +
-  '(see language policy below). "dialogue" is any spoken line, copy, or voice-over for that shot (leave "" ' +
-  'if silent). "duration" is seconds as a number. "imagePrompt" is a separate English-only field for an ' +
-  'image-generation model (see language policy below). "characterIds"/"productIds"/"locationId" must ' +
-  'reference ids defined in "visualBible" — use [] / null when no persistent entity applies to that shot. ' +
-  'Keep "shots" in narrative order starting at shotNumber 1. Never wrap the JSON in markdown code fences.';
+  'Every field inside "visualBible" (globalStyle, and every field of every character/product/location) must ' +
+  'ALWAYS be written in English — never Korean — regardless of the language of any other field in this ' +
+  'response; see language policy below. "visual" is the primary scene description, written for a Korean ' +
+  'production team reading a shot list (see language policy below). "dialogue" is any spoken line, copy, or ' +
+  'voice-over for that shot (leave "" if silent). "duration" is seconds as a number. "imagePrompt" is a ' +
+  'separate English-only field for an image-generation model (see language policy below). ' +
+  '"characterIds"/"productIds"/"locationId" must reference ids defined in "visualBible" — use [] / null when ' +
+  'no persistent entity applies to that shot. Keep "shots" in narrative order starting at shotNumber 1. Never ' +
+  'wrap the JSON in markdown code fences.';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -187,13 +193,15 @@ const SHOTS_ONLY_OUTPUT_CONTRACT =
   '"movement": string, "composition": string, "visual": string, "action": string, "lighting": string, ' +
   '"mood": string, "location": string, "props": string, "dialogue": string, "sfx": string, "transition": ' +
   'string, "purpose": string, "imagePrompt": string, "characterIds": string[], "productIds": string[], ' +
-  '"locationId": (string or null)}]}. "visual" is the primary scene description, written for a Korean ' +
-  'production team reading a shot list (see language policy below). "dialogue" is any spoken line, copy, or ' +
-  'voice-over for that shot (leave "" if silent). "duration" is seconds as a number. "imagePrompt" is a ' +
-  'separate English-only field for an image-generation model (see language policy below). ' +
-  '"characterIds"/"productIds"/"locationId" must reference ids defined in "visualBible" — use [] / null when ' +
-  'no persistent entity applies. Keep "shots" in narrative order starting at shotNumber 1. Never wrap the ' +
-  'JSON in markdown code fences.';
+  '"locationId": (string or null)}]}. Every field inside "visualBible" (globalStyle, and every field of ' +
+  'every character/product/location) must ALWAYS be written in English — never Korean — regardless of the ' +
+  'language of any other field in this response; see language policy below. "visual" is the primary scene ' +
+  'description, written for a Korean production team reading a shot list (see language policy below). ' +
+  '"dialogue" is any spoken line, copy, or voice-over for that shot (leave "" if silent). "duration" is ' +
+  'seconds as a number. "imagePrompt" is a separate English-only field for an image-generation model (see ' +
+  'language policy below). "characterIds"/"productIds"/"locationId" must reference ids defined in ' +
+  '"visualBible" — use [] / null when no persistent entity applies. Keep "shots" in narrative order starting ' +
+  'at shotNumber 1. Never wrap the JSON in markdown code fences.';
 
 interface Treatment {
   title: string;
