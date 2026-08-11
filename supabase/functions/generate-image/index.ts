@@ -1,15 +1,211 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
+const IMAGE_SIZE_BY_ASPECT_RATIO: Record<string, string> = {
+  '1:1': '1024x1024',
+  '9:16': '1024x1536',
+  '16:9': '1536x1024',
+};
+
 const STYLE_MODIFIERS: Record<string, string> = {
   sketch: 'black and white pencil sketch storyboard style, rough hand-drawn line art',
   animation: 'flat 2D animation illustration style, vibrant colors, cartoon character design',
   live_action: 'photorealistic cinematic film still, realistic lighting, live action',
 };
 
-function composePrompt(style: string, overallPrompt: string, sceneDescription: string, cameraDirection: string) {
-  return [STYLE_MODIFIERS[style], overallPrompt.trim(), sceneDescription.trim(), cameraDirection.trim()]
-    .filter((p) => p.length > 0)
-    .join(', ');
+interface CharacterEntity {
+  id: string;
+  label: string;
+  ageRange?: string;
+  genderPresentation?: string;
+  ethnicity?: string;
+  facialCharacteristics?: string;
+  hairstyle?: string;
+  outfit?: string;
+  build?: string;
+  distinctiveTraits?: string;
+  referenceImageUrl?: string | null;
+}
+
+interface ProductEntity {
+  id: string;
+  label: string;
+  type?: string;
+  shape?: string;
+  color?: string;
+  material?: string;
+  packaging?: string;
+  labelDetails?: string;
+  relativeSize?: string;
+  distinctiveDetails?: string;
+  referenceImageUrl?: string | null;
+}
+
+interface LocationEntity {
+  id: string;
+  label: string;
+  environmentType?: string;
+  architectureInterior?: string;
+  keyColors?: string;
+  lighting?: string;
+  recurringProps?: string;
+  referenceImageUrl?: string | null;
+}
+
+interface VisualBible {
+  globalStyle?: string;
+  characters?: CharacterEntity[];
+  products?: ProductEntity[];
+  locations?: LocationEntity[];
+}
+
+interface EntityRefs {
+  characters?: string[];
+  products?: string[];
+  location?: string | null;
+}
+
+function describeCharacter(e: CharacterEntity): string {
+  return `${e.label}: ${[
+    e.ageRange && `age ${e.ageRange}`,
+    e.genderPresentation,
+    e.ethnicity,
+    e.facialCharacteristics,
+    e.hairstyle && `hair: ${e.hairstyle}`,
+    e.outfit && `wearing: ${e.outfit}`,
+    e.build,
+    e.distinctiveTraits,
+  ].filter(Boolean).join(', ')}`;
+}
+
+function describeProduct(e: ProductEntity): string {
+  return `${e.label}: ${[
+    e.type,
+    e.shape,
+    e.color,
+    e.material,
+    e.packaging && `packaging: ${e.packaging}`,
+    e.labelDetails && `label: ${e.labelDetails}`,
+    e.relativeSize,
+    e.distinctiveDetails,
+  ].filter(Boolean).join(', ')}`;
+}
+
+function describeLocation(e: LocationEntity): string {
+  return `${e.label}: ${[
+    e.environmentType,
+    e.architectureInterior,
+    e.keyColors && `colors: ${e.keyColors}`,
+    e.lighting && `lighting: ${e.lighting}`,
+    e.recurringProps && `recurring props: ${e.recurringProps}`,
+  ].filter(Boolean).join(', ')}`;
+}
+
+function composeEntityAwarePrompt(
+  style: string,
+  overallPrompt: string,
+  visualBible: VisualBible,
+  entityRefs: EntityRefs,
+  sceneDescription: string,
+  cameraDirection: string,
+): string {
+  const characters = (visualBible.characters ?? []).filter((c) => (entityRefs.characters ?? []).includes(c.id));
+  const products = (visualBible.products ?? []).filter((p) => (entityRefs.products ?? []).includes(p.id));
+  const location = (visualBible.locations ?? []).find((l) => l.id === entityRefs.location);
+
+  const parts = [
+    STYLE_MODIFIERS[style],
+    visualBible.globalStyle,
+    overallPrompt.trim(),
+    ...characters.map(describeCharacter),
+    ...products.map(describeProduct),
+    location ? describeLocation(location) : null,
+    sceneDescription.trim(),
+    cameraDirection.trim(),
+    (entityRefs.characters?.length || entityRefs.products?.length)
+      ? 'Preserve the exact identity, face, hairstyle, outfit, and packaging described above; only pose, ' +
+        'action, framing, and camera angle should follow the scene description.'
+      : null,
+  ];
+  return parts.filter((p): p is string => !!p && p.length > 0).join(', ');
+}
+
+function collectReferenceImageUrls(visualBible: VisualBible, entityRefs: EntityRefs): string[] {
+  const urls: string[] = [];
+  for (const id of entityRefs.characters ?? []) {
+    const url = visualBible.characters?.find((c) => c.id === id)?.referenceImageUrl;
+    if (url) urls.push(url);
+  }
+  for (const id of entityRefs.products ?? []) {
+    const url = visualBible.products?.find((p) => p.id === id)?.referenceImageUrl;
+    if (url) urls.push(url);
+  }
+  if (entityRefs.location) {
+    const url = visualBible.locations?.find((l) => l.id === entityRefs.location)?.referenceImageUrl;
+    if (url) urls.push(url);
+  }
+  return [...new Set(urls)].slice(0, 4);
+}
+
+function withLockedReferenceImages(visualBible: VisualBible, entityRefs: EntityRefs, imageUrl: string): VisualBible {
+  const characterIds = new Set(entityRefs.characters ?? []);
+  const productIds = new Set(entityRefs.products ?? []);
+  return {
+    ...visualBible,
+    characters: (visualBible.characters ?? []).map((c) =>
+      characterIds.has(c.id) && !c.referenceImageUrl ? { ...c, referenceImageUrl: imageUrl } : c
+    ),
+    products: (visualBible.products ?? []).map((p) =>
+      productIds.has(p.id) && !p.referenceImageUrl ? { ...p, referenceImageUrl: imageUrl } : p
+    ),
+    locations: (visualBible.locations ?? []).map((l) =>
+      l.id === entityRefs.location && !l.referenceImageUrl ? { ...l, referenceImageUrl: imageUrl } : l
+    ),
+  };
+}
+
+async function generateViaText(prompt: string, size: string): Promise<string> {
+  const openaiRes = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model: 'gpt-image-1', prompt, size, n: 1 }),
+  });
+  if (!openaiRes.ok) {
+    const errText = await openaiRes.text();
+    throw new Error(`openai error: ${errText}`);
+  }
+  const openaiJson = await openaiRes.json();
+  const b64 = openaiJson.data?.[0]?.b64_json;
+  if (!b64) throw new Error('openai: no image returned');
+  return b64;
+}
+
+async function generateViaReference(prompt: string, size: string, referenceUrls: string[]): Promise<string> {
+  const form = new FormData();
+  form.append('model', 'gpt-image-1');
+  form.append('prompt', prompt);
+  form.append('size', size);
+  for (let i = 0; i < referenceUrls.length; i++) {
+    const imgRes = await fetch(referenceUrls[i]);
+    if (!imgRes.ok) throw new Error(`failed to fetch reference image ${referenceUrls[i]}`);
+    const blob = await imgRes.blob();
+    form.append('image[]', blob, `reference-${i}.png`);
+  }
+  const openaiRes = await fetch('https://api.openai.com/v1/images/edits', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}` },
+    body: form,
+  });
+  if (!openaiRes.ok) {
+    const errText = await openaiRes.text();
+    throw new Error(`openai edits error: ${errText}`);
+  }
+  const openaiJson = await openaiRes.json();
+  const b64 = openaiJson.data?.[0]?.b64_json;
+  if (!b64) throw new Error('openai edits: no image returned');
+  return b64;
 }
 
 const CORS_HEADERS: Record<string, string> = {
@@ -58,25 +254,34 @@ Deno.serve(async (req) => {
 
     await supabase.from('cuts').update({ generation_status: 'generating' }).eq('id', cutId);
 
-    const prompt = composePrompt(project.style, project.overall_prompt, cut.scene_description, cut.camera_direction);
+    const visualBible: VisualBible = (project.visual_bible as VisualBible) ?? {};
+    const entityRefs: EntityRefs = (cut.entity_refs as EntityRefs) ?? {};
 
-    const openaiRes = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1024', n: 1 }),
-    });
+    const prompt = composeEntityAwarePrompt(
+      project.style, project.overall_prompt, visualBible, entityRefs, cut.scene_description, cut.camera_direction,
+    );
+    const size = IMAGE_SIZE_BY_ASPECT_RATIO[project.aspect_ratio as string] ?? '1024x1024';
+    const referenceUrls = collectReferenceImageUrls(visualBible, entityRefs);
 
-    if (!openaiRes.ok) {
-      await supabase.from('cuts').update({ generation_status: 'failed' }).eq('id', cutId);
-      const errText = await openaiRes.text();
-      return jsonResponse({ error: `openai error: ${errText}` }, 502);
+    let b64: string;
+    try {
+      b64 = referenceUrls.length > 0
+        ? await generateViaReference(prompt, size, referenceUrls)
+        : await generateViaText(prompt, size);
+    } catch (primaryErr) {
+      if (referenceUrls.length === 0) {
+        await supabase.from('cuts').update({ generation_status: 'failed' }).eq('id', cutId);
+        return jsonResponse({ error: String(primaryErr) }, 502);
+      }
+      console.error('reference-based generation failed, falling back to text-only', String(primaryErr));
+      try {
+        b64 = await generateViaText(prompt, size);
+      } catch (fallbackErr) {
+        await supabase.from('cuts').update({ generation_status: 'failed' }).eq('id', cutId);
+        return jsonResponse({ error: String(fallbackErr) }, 502);
+      }
     }
 
-    const openaiJson = await openaiRes.json();
-    const b64 = openaiJson.data[0].b64_json;
     const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
     const path = `${cut.project_id}/${cut.id}-${Date.now()}.png`;
 
@@ -93,12 +298,18 @@ Deno.serve(async (req) => {
 
     await supabase.from('cuts').update({ image_url: imageUrl, generation_status: 'done' }).eq('id', cutId);
 
+    const hasEntities = (entityRefs.characters?.length ?? 0) > 0 || (entityRefs.products?.length ?? 0) > 0 || !!entityRefs.location;
+    if (hasEntities) {
+      const updatedBible = withLockedReferenceImages(visualBible, entityRefs, imageUrl);
+      await supabase.from('projects').update({ visual_bible: updatedBible }).eq('id', project.id);
+    }
+
     return jsonResponse({ imageUrl }, 200);
   } catch (err) {
     if (cutId) {
       try {
         await supabase.from('cuts').update({ generation_status: 'failed' }).eq('id', cutId);
-      } catch (_cleanupErr) {
+      } catch {
         // Swallow cleanup errors — reporting the original error takes priority.
       }
     }
