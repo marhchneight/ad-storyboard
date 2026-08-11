@@ -746,6 +746,7 @@ a.btn-primary {
 
 .home-shell {
   max-width: 880px;
+  margin: 0 auto;
 }
 
 .home-header {
