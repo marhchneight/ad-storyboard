@@ -107,6 +107,7 @@ function composeEntityAwarePrompt(
   entityRefs: EntityRefs,
   sceneDescription: string,
   cameraDirection: string,
+  usingReference: boolean,
 ): string {
   const characters = (visualBible.characters ?? []).filter((c) => (entityRefs.characters ?? []).includes(c.id));
   const products = (visualBible.products ?? []).filter((p) => (entityRefs.products ?? []).includes(p.id));
@@ -124,6 +125,13 @@ function composeEntityAwarePrompt(
     (entityRefs.characters?.length || entityRefs.products?.length)
       ? 'Preserve the exact identity, face, hairstyle, outfit, and packaging described above; only pose, ' +
         'action, framing, and camera angle should follow the scene description.'
+      : null,
+    usingReference
+      ? `IMPORTANT — art style override: render this image strictly in the following visual style: ` +
+        `${STYLE_MODIFIERS[style]}. The reference images are provided ONLY to preserve character/product/` +
+        `location identity (face, hairstyle, outfit, packaging, background layout) — do not copy their ` +
+        `medium, color palette, rendering technique, or level of realism. If the reference images and this ` +
+        `style instruction conflict on anything other than identity, this style instruction wins.`
       : null,
   ];
   return parts.filter((p): p is string => !!p && p.length > 0).join(', ');
@@ -257,11 +265,12 @@ Deno.serve(async (req) => {
     const visualBible: VisualBible = (project.visual_bible as VisualBible) ?? {};
     const entityRefs: EntityRefs = (cut.entity_refs as EntityRefs) ?? {};
 
-    const prompt = composeEntityAwarePrompt(
-      project.style, project.overall_prompt, visualBible, entityRefs, cut.scene_description, cut.camera_direction,
-    );
     const size = IMAGE_SIZE_BY_ASPECT_RATIO[project.aspect_ratio as string] ?? '1024x1024';
     const referenceUrls = collectReferenceImageUrls(visualBible, entityRefs);
+    const prompt = composeEntityAwarePrompt(
+      project.style, project.overall_prompt, visualBible, entityRefs, cut.scene_description, cut.camera_direction,
+      referenceUrls.length > 0,
+    );
 
     let b64: string;
     try {
