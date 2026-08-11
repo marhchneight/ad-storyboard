@@ -22,7 +22,8 @@ export default function SortableCutCard({ cut, index, onUpdate, onGenerate, onRe
   };
 
   return (
-    <tr ref={setNodeRef} style={style} className="sortable-cut-card">
+    <tr ref={setNodeRef} style={style} className="sortable-cut-card"
+      data-cut-id={cut.id} data-cut-dna-applied={cut.applied_creative_dna.length > 0 ? 'true' : undefined}>
       <td className="drag-handle-cell">
         <span className="drag-handle" {...attributes} {...listeners}>⠿</span>
       </td>

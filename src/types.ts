@@ -69,6 +69,18 @@ export interface CreativeConcept {
   concept: string;
 }
 
+export type CreativeDnaCategory =
+  | 'camera' | 'lighting' | 'composition' | 'editRhythm' | 'colorMood' | 'creativePrinciple';
+
+/** One Creative DNA element actually selected as influencing a specific scene. */
+export interface AppliedCreativeDnaTag {
+  category: CreativeDnaCategory;
+  /** Short English slug the model invents for this element, e.g. "closeUp". */
+  key: string;
+  /** Natural Korean label shown in the UI, e.g. "클로즈업". */
+  labelKo: string;
+}
+
 export interface Project {
   id: string;
   user_id: string;
@@ -107,6 +119,12 @@ export interface Cut {
   sfx: string;
   transition: string;
   purpose: string;
+  // Which Creative DNA elements (if any) genuinely influenced this scene, and
+  // a short Korean note on how. Defaults to []/'' at the DB level, so these
+  // are always present (never undefined) even on rows saved before this
+  // field existed — no DNA was ever "applied" to those, which is correct.
+  applied_creative_dna: AppliedCreativeDnaTag[];
+  creative_dna_application_note: string;
   created_at: string;
   updated_at: string;
 }

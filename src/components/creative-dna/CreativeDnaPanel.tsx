@@ -11,6 +11,12 @@ interface Props {
 
 type ReferenceMode = 'image_upload' | 'image_url' | 'text';
 
+interface ApplyStatus {
+  appliedCount: number;
+  totalCount: number;
+  firstAppliedCutId: string | null;
+}
+
 export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: Props) {
   const [mode, setMode] = useState<ReferenceMode>('image_upload');
   const [imageUrlInput, setImageUrlInput] = useState('');
@@ -18,6 +24,7 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
   const [analyzing, setAnalyzing] = useState(false);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [applyStatus, setApplyStatus] = useState<ApplyStatus | null>(null);
 
   const dna = project.creative_dna;
 
@@ -51,6 +58,7 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
     e.target.value = '';
     if (!file) return;
     setError(null);
+    setApplyStatus(null);
     setAnalyzing(true);
     try {
       const dataUrl = await fileToDataUrl(file);
@@ -68,6 +76,7 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
     e.preventDefault();
     if (!imageUrlInput.trim()) return;
     setError(null);
+    setApplyStatus(null);
     setAnalyzing(true);
     try {
       await analyzeCreativeDna(project.id, { imageUrl: imageUrlInput.trim() });
@@ -84,6 +93,7 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
     e.preventDefault();
     if (!textInput.trim()) return;
     setError(null);
+    setApplyStatus(null);
     setAnalyzing(true);
     try {
       await analyzeCreativeDna(project.id, { textDescription: textInput.trim() });
@@ -99,17 +109,34 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
   async function handleApplyDna() {
     if (!dna) return;
     setError(null);
+    setApplyStatus(null);
     onBeforeApply();
     setApplying(true);
     try {
-      const changes = await applyCreativeDna(project.id, dna);
+      const result = await applyCreativeDna(project.id, dna);
       const updated = await refreshProject();
-      if (updated) onApplied(changes, updated);
+      if (updated) onApplied(result.changes, updated);
+      setApplyStatus({
+        appliedCount: result.appliedCount,
+        totalCount: result.totalCount,
+        firstAppliedCutId: result.firstAppliedCutId,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setApplying(false);
     }
+  }
+
+  function handleViewAppliedCuts() {
+    const cutId = applyStatus?.firstAppliedCutId;
+    if (!cutId) return;
+    const row = document.querySelector<HTMLElement>(`[data-cut-id="${cutId}"]`);
+    row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.querySelectorAll<HTMLElement>('[data-cut-dna-applied="true"]').forEach((el) => {
+      el.classList.add('cut-dna-highlight');
+      setTimeout(() => el.classList.remove('cut-dna-highlight'), 1600);
+    });
   }
 
   return (
@@ -178,6 +205,21 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
           <button type="button" className="btn-primary btn-block" onClick={handleApplyDna} disabled={applying}>
             {applying ? 'DNA를 적용하는 중...' : '스토리보드에 DNA 적용'}
           </button>
+
+          {applyStatus && (
+            <div className="dna-apply-status">
+              <span className="dna-apply-status-title">✓ Creative DNA 적용됨</span>
+              <p>
+                {applyStatus.totalCount}개 컷 중 {applyStatus.appliedCount}개 컷에 레퍼런스 연출 요소가
+                반영되었습니다.
+              </p>
+              {applyStatus.firstAppliedCutId && (
+                <button type="button" className="btn-text" onClick={handleViewAppliedCuts}>
+                  적용된 컷 보기 →
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -13,7 +13,9 @@ const OUTPUT_CONTRACT =
   '"composition": string, "visual": string, "action": string, "lighting": string, "mood": string, ' +
   '"location": string, "props": string, "dialogue": string, "sfx": string, "transition": string, ' +
   '"purpose": string, "imagePrompt": string, "characterIds": string[], "productIds": string[], ' +
-  '"locationId": (string or null)}]}. Each shot\'s "location" field is a short KOREAN phrase naming where ' +
+  '"locationId": (string or null), "appliedCreativeDNA": [{"category": "camera"|"lighting"|"composition"|' +
+  '"editRhythm"|"colorMood"|"creativePrinciple", "key": string, "labelKo": string}], ' +
+  '"creativeDNAApplicationNote": string}]}. Each shot\'s "location" field is a short KOREAN phrase naming where ' +
   'this shot takes place for a human reading the shot list (e.g. "모던한 아파트 거실") — do not confuse it ' +
   'with the persistent location entity (referenced only via "locationId"), which stays in English elsewhere. ' +
   '"changesSummary" is 2-5 short Korean bullet strings describing what ' +
@@ -22,8 +24,39 @@ const OUTPUT_CONTRACT =
   'policy below). "characterIds"/"productIds"/"locationId" must reference the persistent entity ids listed ' +
   'below and must stay exactly the same as each shot\'s current ids unless the direction explicitly changes ' +
   'which entity appears in that shot (e.g. a costume change, a new location) — never invent a new entity id. ' +
+  '"appliedCreativeDNA" and "creativeDNAApplicationNote" only apply when a Creative DNA profile is given below ' +
+  '(see the Creative DNA section) — otherwise always return an empty array and empty string for them. ' +
   'Keep "shots" in narrative order starting at shotNumber 1. You may add, remove, or reorder shots if the ' +
   'instruction calls for it. Never wrap the JSON in markdown code fences.';
+
+const CREATIVE_DNA_INSTRUCTIONS =
+  'Creative DNA selection: you are given a Creative DNA profile below (extracted from a reference the client ' +
+  'liked). For every shot, explicitly decide which Creative DNA elements you actually drew on for that ' +
+  'shot\'s camera, lighting, composition, color, rhythm, or creative-direction choices, and list them in that ' +
+  'shot\'s "appliedCreativeDNA". Do NOT copy every Creative DNA element onto every shot — that defeats the ' +
+  'purpose. Camera and composition elements should be selected per shot based on what genuinely fits that ' +
+  'shot\'s specific purpose, and should vary between shots (e.g. a close-up element for a product-detail shot, ' +
+  'a wide/top-down element for an establishing shot) — do not reuse the same camera/composition element on ' +
+  'every shot out of laziness. colorMood and editRhythm elements are more often project-wide and MAY reasonably ' +
+  'repeat across several shots when they genuinely apply throughout. If a shot doesn\'t meaningfully draw on ' +
+  'the Creative DNA, return an empty "appliedCreativeDNA" array and empty "creativeDNAApplicationNote" for it ' +
+  'rather than forcing one just to have something there. For each selected element: "key" is a short camelCase ' +
+  'English slug you invent for it (e.g. "closeUp", "warmBacklight"); "labelKo" is a short natural Korean label ' +
+  'for a Korean production team — reuse the matching Korean phrasing from the profile below when one is given, ' +
+  'otherwise write a natural one yourself (industry loanwords like 클로즈업/와이드 숏/탑뷰/로우앵글/하이앵글/' +
+  '트래킹 숏/핸드헬드/줌 인/줌 아웃/달리 인/달리 아웃/몽타주/백라이트/프레이밍 are fine, never forced literal ' +
+  'translation). "creativeDNAApplicationNote" is one short natural Korean sentence explaining how the selected ' +
+  'elements were applied to this specific shot (e.g. "제품의 질감과 색감을 강조하기 위해 클로즈업과 밝은 조명을 ' +
+  '적용했습니다."). MECHANICAL RULE, not a matter of judgment: for ANY shot where "appliedCreativeDNA" is ' +
+  'non-empty, the "imagePrompt" you return MUST be textually different from that shot\'s CURRENT imagePrompt ' +
+  '(shown per shot in the current shot list below) — character-for-character identical is an automatic ' +
+  'failure and that shot\'s applied DNA will be discarded. At minimum, rewrite the sentence to explicitly ' +
+  'name the camera/lighting/composition language of every selected element (e.g. if you selected a top-down ' +
+  'element, imagePrompt must contain a phrase like "aerial top-down view of..." even if the rest of the shot ' +
+  'is otherwise similar). Do the same check for "shotSize"/"angle"/"movement"/"composition" — update whichever ' +
+  'of those correspond to what you selected. If, after genuinely trying, a shot truly needs no change because ' +
+  'you decided not to select any DNA element for it, that is fine — just make sure "appliedCreativeDNA" is ' +
+  'empty for that shot too, matching the unchanged imagePrompt.';
 
 const LANGUAGE_POLICY =
   'Language policy: "creativeDirection", "changesSummary", and every shot field except "imagePrompt" must be ' +
@@ -96,6 +129,51 @@ function jsonResponse(body: unknown, status: number) {
   });
 }
 
+interface AppliedCreativeDnaTag {
+  category: 'camera' | 'lighting' | 'composition' | 'editRhythm' | 'colorMood' | 'creativePrinciple';
+  key: string;
+  labelKo: string;
+}
+
+const DNA_CATEGORIES = new Set(['camera', 'lighting', 'composition', 'editRhythm', 'colorMood', 'creativePrinciple']);
+
+function sanitizeAppliedDna(value: unknown): AppliedCreativeDnaTag[] {
+  if (!Array.isArray(value)) return [];
+  const out: AppliedCreativeDnaTag[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const i = item as Record<string, unknown>;
+    if (typeof i.category !== 'string' || !DNA_CATEGORIES.has(i.category)) continue;
+    if (typeof i.key !== 'string' || !i.key.trim()) continue;
+    if (typeof i.labelKo !== 'string' || !i.labelKo.trim()) continue;
+    out.push({ category: i.category as AppliedCreativeDnaTag['category'], key: i.key, labelKo: i.labelKo });
+  }
+  return out;
+}
+
+function camelToPhrase(key: string): string {
+  return key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
+// The model is asked to rewrite imagePrompt so it reflects every selected
+// DNA element, but LLMs are unreliable about consistently touching a
+// secondary field like this. Rather than trust that (or silently drop the
+// applied tags when it doesn't comply, losing real selections), guarantee
+// the same source of truth deterministically: append any element whose
+// descriptor isn't already present in the prompt text. This is what makes
+// scene.appliedCreativeDNA and the actual image-generation prompt provably
+// consistent, not just usually consistent.
+function ensureImagePromptReflectsDna(imagePrompt: string, tags: AppliedCreativeDnaTag[]): string {
+  const base = imagePrompt.trim();
+  if (tags.length === 0) return base;
+  const lowerBase = base.toLowerCase();
+  const missingPhrases = tags
+    .map((t) => camelToPhrase(t.key))
+    .filter((phrase) => phrase.length > 0 && !lowerBase.includes(phrase));
+  if (missingPhrases.length === 0) return base;
+  return base ? `${base}, ${missingPhrases.join(', ')}` : missingPhrases.join(', ');
+}
+
 interface RevisedShot {
   shotNumber: number;
   duration: number;
@@ -118,6 +196,8 @@ interface RevisedShot {
   characterIds?: string[];
   productIds?: string[];
   locationId?: string | null;
+  appliedCreativeDNA?: unknown;
+  creativeDNAApplicationNote?: string;
 }
 
 interface EditorOutput {
@@ -150,7 +230,7 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { projectId, preset, instruction } = await req.json();
+    const { projectId, preset, instruction, creativeDna } = await req.json();
     if (!projectId) return jsonResponse({ error: 'projectId required' }, 400);
     if (!preset && !instruction) return jsonResponse({ error: 'preset or instruction required' }, 400);
     if (preset && !PRESET_DIRECTIONS[preset]) return jsonResponse({ error: 'unknown preset' }, 400);
@@ -185,6 +265,7 @@ Deno.serve(async (req) => {
         movement: c.movement,
         composition: c.composition,
         visual: c.scene_description,
+        imagePrompt: c.image_prompt,
         action: c.action,
         lighting: c.lighting,
         mood: c.mood,
@@ -206,12 +287,17 @@ Deno.serve(async (req) => {
 
     const visualBible = (project.visual_bible as VisualBibleForSummary) ?? {};
 
+    const hasCreativeDna = creativeDna && typeof creativeDna === 'object';
+    const creativeDnaBlock = hasCreativeDna
+      ? `\n\n${CREATIVE_DNA_INSTRUCTIONS}\n\nCreative DNA profile:\n${JSON.stringify(creativeDna)}`
+      : '';
+
     const userPrompt = `${OUTPUT_CONTRACT}\n\n` +
       `Product / concept (do not change): ${project.overall_prompt}\n\n` +
       `Persistent project entities (visual definitions live elsewhere and must not be altered unless the ` +
       `direction explicitly requires it):\n${summarizeVisualBible(visualBible)}\n\n` +
       `Current shot list:\n${JSON.stringify(shotsContext)}\n\n` +
-      `Direction to apply: ${directionInstruction}`;
+      `Direction to apply: ${directionInstruction}` + creativeDnaBlock;
 
     const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -256,6 +342,15 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < minLen; i++) {
       const shot = newShots[i];
+      const modelImagePrompt = (typeof shot.imagePrompt === 'string' && shot.imagePrompt.trim())
+        ? shot.imagePrompt
+        : (existingCuts[i].image_prompt ?? '');
+      const shotAppliedDna = sanitizeAppliedDna(shot.appliedCreativeDNA);
+      const resolvedImagePrompt = ensureImagePromptReflectsDna(modelImagePrompt, shotAppliedDna);
+      const shotDnaNote = shotAppliedDna.length > 0 && typeof shot.creativeDNAApplicationNote === 'string'
+        ? shot.creativeDNAApplicationNote
+        : '';
+
       await supabase.from('cuts').update({
         order_index: i,
         scene_description: shot.visual ?? '',
@@ -275,14 +370,14 @@ Deno.serve(async (req) => {
         sfx: shot.sfx ?? '',
         transition: shot.transition ?? '',
         purpose: shot.purpose ?? '',
-        image_prompt: (typeof shot.imagePrompt === 'string' && shot.imagePrompt.trim())
-          ? shot.imagePrompt
-          : (existingCuts[i].image_prompt ?? ''),
+        image_prompt: resolvedImagePrompt,
         entity_refs: {
           characters: Array.isArray(shot.characterIds) ? shot.characterIds : [],
           products: Array.isArray(shot.productIds) ? shot.productIds : [],
           location: typeof shot.locationId === 'string' ? shot.locationId : null,
         },
+        applied_creative_dna: shotAppliedDna,
+        creative_dna_application_note: shotDnaNote,
         image_url: null,
         generation_status: 'idle',
       }).eq('id', existingCuts[i].id);
@@ -309,12 +404,16 @@ Deno.serve(async (req) => {
         sfx: shot.sfx ?? '',
         transition: shot.transition ?? '',
         purpose: shot.purpose ?? '',
-        image_prompt: shot.imagePrompt ?? '',
+        image_prompt: ensureImagePromptReflectsDna(shot.imagePrompt ?? '', sanitizeAppliedDna(shot.appliedCreativeDNA)),
         entity_refs: {
           characters: Array.isArray(shot.characterIds) ? shot.characterIds : [],
           products: Array.isArray(shot.productIds) ? shot.productIds : [],
           location: typeof shot.locationId === 'string' ? shot.locationId : null,
         },
+        applied_creative_dna: sanitizeAppliedDna(shot.appliedCreativeDNA),
+        creative_dna_application_note: typeof shot.creativeDNAApplicationNote === 'string'
+          ? shot.creativeDNAApplicationNote
+          : '',
       }));
       await supabase.from('cuts').insert(extraRows);
     } else if (existingCuts.length > newShots.length) {

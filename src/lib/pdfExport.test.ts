@@ -24,6 +24,7 @@ const project: Project = {
 const shotDetailDefaults = {
   duration_seconds: null, shot_size: '', lens: '', angle: '', movement: '', composition: '',
   action: '', lighting: '', mood: '', location: '', props: '', sfx: '', transition: '', purpose: '',
+  applied_creative_dna: [], creative_dna_application_note: '',
 };
 
 const cuts: Cut[] = [

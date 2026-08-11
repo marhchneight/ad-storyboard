@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Cut } from '../types';
+import type { AppliedCreativeDnaTag, Cut, CreativeDnaCategory } from '../types';
 import { downloadCutImage } from '../lib/pdfExport';
 import { editShot, SHOT_QUICK_ACTIONS, type ShotQuickAction } from '../lib/directorApi';
 
@@ -124,6 +124,7 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
       </td>
       <td className="cut-cell cut-cell-details">
         <ShotDetails cut={cut} />
+        <AppliedDna cut={cut} />
         <details className="shot-ai-edit">
           <summary>AI 수정</summary>
           <div className="shot-ai-quick-actions">
@@ -172,6 +173,63 @@ const DETAIL_FIELDS: { key: keyof Cut; label: string }[] = [
   { key: 'transition', label: 'Transition' },
   { key: 'purpose', label: 'Purpose' },
 ];
+
+const DNA_CATEGORY_ORDER: CreativeDnaCategory[] = [
+  'camera', 'lighting', 'composition', 'editRhythm', 'colorMood', 'creativePrinciple',
+];
+
+const DNA_CATEGORY_LABELS: Record<CreativeDnaCategory, string> = {
+  camera: '카메라',
+  lighting: '조명',
+  composition: '화면 구성',
+  editRhythm: '편집 / 리듬',
+  colorMood: '컬러 / 무드',
+  creativePrinciple: '크리에이티브 방향',
+};
+
+function groupByCategory(tags: AppliedCreativeDnaTag[]): { category: CreativeDnaCategory; labels: string[] }[] {
+  return DNA_CATEGORY_ORDER
+    .map((category) => ({ category, labels: tags.filter((t) => t.category === category).map((t) => t.labelKo) }))
+    .filter((g) => g.labels.length > 0);
+}
+
+// Compact secondary indicator — max 3 tags + "+N" in the summary, click to
+// expand the full breakdown. Not shown at all when this scene used none.
+function AppliedDna({ cut }: { cut: Cut }) {
+  const tags = cut.applied_creative_dna;
+  if (tags.length === 0) return null;
+
+  const visible = tags.slice(0, 3);
+  const extra = tags.length - visible.length;
+  const grouped = groupByCategory(tags);
+
+  return (
+    <details className="dna-applied">
+      <summary>
+        <span className="dna-applied-label">레퍼런스 DNA 적용</span>
+        <span className="dna-applied-tags">
+          {visible.map((t) => <span className="dna-tag" key={t.key}>{t.labelKo}</span>)}
+          {extra > 0 && <span className="dna-tag dna-tag-more">+{extra}</span>}
+        </span>
+      </summary>
+      <div className="dna-applied-detail">
+        <span className="dna-applied-detail-heading">이 컷에 반영된 Creative DNA</span>
+        {grouped.map(({ category, labels }) => (
+          <div className="dna-applied-category" key={category}>
+            <span className="dna-applied-category-label">{DNA_CATEGORY_LABELS[category]}</span>
+            <span>{labels.join(' · ')}</span>
+          </div>
+        ))}
+        {cut.creative_dna_application_note && (
+          <div className="dna-applied-category">
+            <span className="dna-applied-category-label">적용 방식</span>
+            <p className="dna-applied-note">{cut.creative_dna_application_note}</p>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
 
 function ShotDetails({ cut }: { cut: Cut }) {
   const filled = DETAIL_FIELDS.filter(({ key }) => {

@@ -1,5 +1,4 @@
 import { supabase } from './supabaseClient';
-import { askTheDirector } from './directorApi';
 import type { CreativeDna } from '../types';
 
 async function authHeader(): Promise<Record<string, string>> {
@@ -72,14 +71,49 @@ function summarizeDna(dna: CreativeDna): string {
   return parts.join('\n');
 }
 
+export interface ApplyCreativeDnaResult {
+  changes: string[];
+  /** How many cuts ended up with at least one appliedCreativeDNA element. */
+  appliedCount: number;
+  totalCount: number;
+  /** id of the first (in order_index) cut that has DNA applied, for "적용된 컷 보기" scroll-to. */
+  firstAppliedCutId: string | null;
+}
+
 /**
  * Applies a previously analyzed Creative DNA to the current storyboard: framing, camera language,
  * pacing, lighting, composition, and mood only — product, message, and narrative stay unchanged.
+ * The storyboard-editor function selects which DNA elements apply to each shot individually
+ * (scene.appliedCreativeDNA) rather than stamping the whole profile onto every shot.
  */
-export async function applyCreativeDna(projectId: string, dna: CreativeDna): Promise<string[]> {
+export async function applyCreativeDna(projectId: string, dna: CreativeDna): Promise<ApplyCreativeDnaResult> {
   const instruction =
     `아래 Creative DNA를 참고해서 이 스토리보드를 재연출하세요. Do not imitate or recreate the reference ` +
     `literally — 제품, 메시지, 내러티브, 타깃은 그대로 유지하고 framing/camera language/pacing/lighting/` +
     `composition/mood/visual storytelling만 이 DNA에 맞게 바꾸세요.\n\n${summarizeDna(dna)}`;
-  return askTheDirector(projectId, instruction);
+
+  const headers = await authHeader();
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/storyboard-editor`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ projectId, instruction, creativeDna: dna }),
+  });
+  const json = await res.json().catch(() => ({ error: 'Creative DNA 적용에 실패했습니다.' }));
+  if (!res.ok) throw new Error(json.error ?? 'Creative DNA 적용에 실패했습니다.');
+  const changes = (json.changes as string[]) ?? [];
+
+  const { data: cuts } = await supabase
+    .from('cuts')
+    .select('id, applied_creative_dna')
+    .eq('project_id', projectId)
+    .order('order_index');
+  const rows = (cuts ?? []) as { id: string; applied_creative_dna: unknown[] }[];
+  const appliedRows = rows.filter((c) => Array.isArray(c.applied_creative_dna) && c.applied_creative_dna.length > 0);
+
+  return {
+    changes,
+    appliedCount: appliedRows.length,
+    totalCount: rows.length,
+    firstAppliedCutId: appliedRows[0]?.id ?? null,
+  };
 }

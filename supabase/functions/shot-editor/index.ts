@@ -11,14 +11,27 @@ const OUTPUT_CONTRACT =
   '"composition": string, "visual": string, "action": string, "lighting": string, "mood": string, ' +
   '"location": string, "props": string, "dialogue": string, "sfx": string, "transition": string, ' +
   '"purpose": string, "imagePrompt": string, "characterIds": string[], "productIds": string[], ' +
-  '"locationId": (string or null)}}. The "location" field is a short KOREAN phrase naming where this shot ' +
+  '"locationId": (string or null), "appliedCreativeDNA": [{"category": "camera"|"lighting"|"composition"|' +
+  '"editRhythm"|"colorMood"|"creativePrinciple", "key": string, "labelKo": string}], ' +
+  '"creativeDNAApplicationNote": string}}. The "location" field is a short KOREAN phrase naming where this shot ' +
   'takes place for a human reading the shot list (e.g. "모던한 아파트 거실") — do not confuse it with the ' +
   'persistent location entity (referenced only via "locationId"), which stays in English elsewhere. ' +
   '"imagePrompt" is a separate English-only field for an image-generation model (see language policy below). ' +
   '"characterIds"/"productIds"/"locationId" must reference the persistent ' +
   'entity ids listed below and must stay exactly the same as the current shot\'s ids unless the edit ' +
-  'instruction explicitly changes which entity appears in this shot. Never invent a new entity id. Never ' +
-  'wrap the JSON in markdown code fences.';
+  'instruction explicitly changes which entity appears in this shot. Never invent a new entity id. ' +
+  '"appliedCreativeDNA" and "creativeDNAApplicationNote" carry this shot\'s Creative DNA context — see the ' +
+  'Creative DNA section below for how to handle them (if that section is absent, this shot has none: always ' +
+  'return an empty array and empty string for them). Never wrap the JSON in markdown code fences.';
+
+const CREATIVE_DNA_PRESERVATION_NOTE =
+  'Creative DNA context: this shot currently has these Creative DNA elements applied (from an earlier ' +
+  'reference-based direction), with the application note shown after it. By default, KEEP "appliedCreativeDNA" ' +
+  'and "creativeDNAApplicationNote" exactly as given below in your response — a single-shot edit should not ' +
+  'silently lose established Creative DNA context. Only change them if this edit instruction genuinely ' +
+  'conflicts with a specific applied element (e.g. the instruction changes the camera angle/framing but an ' +
+  'applied element specifically describes the old angle/framing) — in that case remove or adjust just the ' +
+  'conflicting element(s) and update the note to match the new shot; leave any non-conflicting elements alone.';
 
 const LANGUAGE_POLICY =
   'Language policy: every field you return except "imagePrompt" must be written in natural Korean, concise ' +
@@ -79,6 +92,47 @@ function jsonResponse(body: unknown, status: number) {
   });
 }
 
+interface AppliedCreativeDnaTag {
+  category: 'camera' | 'lighting' | 'composition' | 'editRhythm' | 'colorMood' | 'creativePrinciple';
+  key: string;
+  labelKo: string;
+}
+
+const DNA_CATEGORIES = new Set(['camera', 'lighting', 'composition', 'editRhythm', 'colorMood', 'creativePrinciple']);
+
+function sanitizeAppliedDna(value: unknown): AppliedCreativeDnaTag[] {
+  if (!Array.isArray(value)) return [];
+  const out: AppliedCreativeDnaTag[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const i = item as Record<string, unknown>;
+    if (typeof i.category !== 'string' || !DNA_CATEGORIES.has(i.category)) continue;
+    if (typeof i.key !== 'string' || !i.key.trim()) continue;
+    if (typeof i.labelKo !== 'string' || !i.labelKo.trim()) continue;
+    out.push({ category: i.category as AppliedCreativeDnaTag['category'], key: i.key, labelKo: i.labelKo });
+  }
+  return out;
+}
+
+function camelToPhrase(key: string): string {
+  return key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
+// Same deterministic guarantee as storyboard-editor: don't rely on the model
+// remembering to rewrite imagePrompt whenever it keeps/adjusts DNA elements
+// — append whatever descriptor is still missing so appliedCreativeDNA and
+// the actual image-generation prompt can never drift apart.
+function ensureImagePromptReflectsDna(imagePrompt: string, tags: AppliedCreativeDnaTag[]): string {
+  const base = imagePrompt.trim();
+  if (tags.length === 0) return base;
+  const lowerBase = base.toLowerCase();
+  const missingPhrases = tags
+    .map((t) => camelToPhrase(t.key))
+    .filter((phrase) => phrase.length > 0 && !lowerBase.includes(phrase));
+  if (missingPhrases.length === 0) return base;
+  return base ? `${base}, ${missingPhrases.join(', ')}` : missingPhrases.join(', ');
+}
+
 interface RevisedShot {
   duration: number;
   shotSize: string;
@@ -100,6 +154,8 @@ interface RevisedShot {
   characterIds?: string[];
   productIds?: string[];
   locationId?: string | null;
+  appliedCreativeDNA?: unknown;
+  creativeDNAApplicationNote?: string;
 }
 
 function isValidShot(value: unknown): value is { shot: RevisedShot } {
@@ -152,6 +208,7 @@ Deno.serve(async (req) => {
       movement: cut.movement,
       composition: cut.composition,
       visual: cut.scene_description,
+      imagePrompt: cut.image_prompt,
       action: cut.action,
       lighting: cut.lighting,
       mood: cut.mood,
@@ -165,6 +222,11 @@ Deno.serve(async (req) => {
 
     const visualBible = (project.visual_bible as VisualBibleForSummary) ?? {};
     const currentEntityRefs = (cut.entity_refs as { characters?: string[]; products?: string[]; location?: string | null }) ?? {};
+    const currentAppliedDna = sanitizeAppliedDna(cut.applied_creative_dna);
+    const dnaBlock = currentAppliedDna.length > 0
+      ? `\n\n${CREATIVE_DNA_PRESERVATION_NOTE}\n\nCurrently applied: ${JSON.stringify(currentAppliedDna)}\n` +
+        `Current application note: ${JSON.stringify(cut.creative_dna_application_note ?? '')}`
+      : '';
 
     const userPrompt = `${OUTPUT_CONTRACT}\n\n` +
       `Product / concept (do not change): ${project.overall_prompt}\n\n` +
@@ -173,7 +235,7 @@ Deno.serve(async (req) => {
       `Current shot (currently references characterIds=${JSON.stringify(currentEntityRefs.characters ?? [])}, ` +
       `productIds=${JSON.stringify(currentEntityRefs.products ?? [])}, ` +
       `locationId=${JSON.stringify(currentEntityRefs.location ?? null)}):\n${JSON.stringify(currentShot)}\n\n` +
-      `Edit instruction: ${editInstruction}`;
+      `Edit instruction: ${editInstruction}` + dnaBlock;
 
     const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -212,6 +274,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'AI가 올바른 형식을 반환하지 않았습니다. 다시 시도해주세요.' }, 502);
     }
     const shot = parsed.shot;
+    const shotAppliedDna = sanitizeAppliedDna(shot.appliedCreativeDNA);
+    const modelImagePrompt = (typeof shot.imagePrompt === 'string' && shot.imagePrompt.trim())
+      ? shot.imagePrompt
+      : (cut.image_prompt ?? '');
 
     const { error: updateError } = await supabase.from('cuts').update({
       scene_description: shot.visual ?? '',
@@ -231,9 +297,7 @@ Deno.serve(async (req) => {
       sfx: shot.sfx ?? '',
       transition: shot.transition ?? '',
       purpose: shot.purpose ?? '',
-      image_prompt: (typeof shot.imagePrompt === 'string' && shot.imagePrompt.trim())
-        ? shot.imagePrompt
-        : (cut.image_prompt ?? ''),
+      image_prompt: ensureImagePromptReflectsDna(modelImagePrompt, shotAppliedDna),
       entity_refs: {
         characters: Array.isArray(shot.characterIds) ? shot.characterIds : (currentEntityRefs.characters ?? []),
         products: Array.isArray(shot.productIds) ? shot.productIds : (currentEntityRefs.products ?? []),
@@ -241,6 +305,10 @@ Deno.serve(async (req) => {
           ? shot.locationId
           : (currentEntityRefs.location ?? null),
       },
+      applied_creative_dna: shotAppliedDna,
+      creative_dna_application_note: typeof shot.creativeDNAApplicationNote === 'string'
+        ? shot.creativeDNAApplicationNote
+        : '',
       image_url: null,
       generation_status: 'idle',
     }).eq('id', cutId);

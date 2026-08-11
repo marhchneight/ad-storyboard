@@ -528,6 +528,103 @@ a.btn-primary {
   font-size: 0.85rem;
 }
 
+/* Per-scene applied Creative DNA */
+
+.dna-applied {
+  margin-top: 8px;
+}
+
+.dna-applied summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.dna-applied summary::-webkit-details-marker {
+  display: none;
+}
+
+.dna-applied-label {
+  display: block;
+  font-size: 0.8rem;
+  color: #666666;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-bottom: 4px;
+}
+
+.dna-applied-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dna-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border: 1px solid #E8E8E8;
+  border-radius: 999px;
+  background-color: #FAFAF8;
+  color: #111111;
+  white-space: nowrap;
+}
+
+.dna-tag-more {
+  color: #666666;
+  border-style: dashed;
+}
+
+.dna-applied-detail {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid #E8E8E8;
+  border-radius: 10px;
+  background-color: #FFFFFF;
+}
+
+.dna-applied-detail-heading {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #666666;
+  margin-bottom: 8px;
+}
+
+.dna-applied-category {
+  font-size: 0.78rem;
+  padding: 5px 0;
+  border-bottom: 1px solid #F0EEE9;
+}
+
+.dna-applied-category:last-child {
+  border-bottom: none;
+}
+
+.dna-applied-category-label {
+  display: block;
+  font-size: 0.68rem;
+  color: #999999;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+}
+
+.dna-applied-note {
+  margin: 0;
+  color: #111111;
+}
+
+.cut-dna-highlight {
+  animation: dna-highlight-flash 1.6s ease;
+}
+
+@keyframes dna-highlight-flash {
+  0% { background-color: #F0EEE9; }
+  100% { background-color: transparent; }
+}
+
 /* Individual shot AI edit */
 
 .shot-ai-edit {
@@ -680,6 +777,31 @@ a.btn-primary {
   padding-left: 18px;
   font-size: 0.85rem;
   color: #111111;
+}
+
+.dna-apply-status {
+  border-top: 1px solid #E8E8E8;
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dna-apply-status-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111111;
+}
+
+.dna-apply-status p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #666666;
+}
+
+.dna-apply-status .btn-text {
+  align-self: flex-start;
+  padding: 0;
 }
 
 /* Image lightbox */
