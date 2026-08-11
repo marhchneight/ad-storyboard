@@ -540,14 +540,13 @@ a.btn-primary {
 }
 
 .shot-ai-quick-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin: 8px 0;
 }
 
 .shot-ai-quick-actions .btn-small {
-  padding: 6px 8px;
   white-space: nowrap;
 }
 
