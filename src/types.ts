@@ -22,6 +22,8 @@ export interface CreativeBrief {
 export interface CreativeDnaScore {
   label: string;
   score: number;
+  /** Natural Korean equivalent of `label`, shown in the UI when present. */
+  labelKo?: string;
 }
 
 export interface CreativeDna {
@@ -32,6 +34,17 @@ export interface CreativeDna {
   editRhythmDna: string[];
   colorMood: string[];
   creativePrinciples: string[];
+  // Optional Korean display mirrors, same order/length as their English
+  // counterparts. Absent on rows saved before localization was added — the
+  // UI falls back to English (and lazily backfills these) when missing.
+  // The English fields above are the ones used for storyboard generation
+  // and must never be replaced by these.
+  cameraDnaKo?: string[];
+  lightingDnaKo?: string[];
+  compositionDnaKo?: string[];
+  editRhythmDnaKo?: string[];
+  colorMoodKo?: string[];
+  creativePrinciplesKo?: string[];
 }
 
 export interface CreativeTreatmentApproach {

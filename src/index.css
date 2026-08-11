@@ -635,7 +635,7 @@ a.btn-primary {
 
 .dna-score-row {
   display: grid;
-  grid-template-columns: 100px 1fr 40px;
+  grid-template-columns: minmax(64px, 116px) 1fr 40px;
   align-items: center;
   gap: 10px;
 }
@@ -643,6 +643,8 @@ a.btn-primary {
 .dna-score-label {
   font-size: 0.8rem;
   color: #666666;
+  overflow-wrap: break-word;
+  word-break: keep-all;
 }
 
 .dna-score-bar {
@@ -733,7 +735,7 @@ a.btn-primary {
   }
 
   .dna-score-row {
-    grid-template-columns: 84px 1fr 36px;
+    grid-template-columns: minmax(56px, 96px) 1fr 36px;
   }
 }
 

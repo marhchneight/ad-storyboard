@@ -117,7 +117,7 @@ export default function ReferenceMode({
           <div className="dna-scores">
             {dna.visualLanguage.map((v) => (
               <div className="dna-score-row" key={v.label}>
-                <span className="dna-score-label">{v.label}</span>
+                <span className="dna-score-label">{v.labelKo ?? v.label}</span>
                 <div className="dna-score-bar">
                   <div className="dna-score-fill" style={{ width: `${Math.max(0, Math.min(100, v.score))}%` }} />
                 </div>

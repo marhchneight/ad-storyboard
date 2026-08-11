@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { analyzeCreativeDna, applyCreativeDna, fileToDataUrl } from '../../lib/creativeDnaApi';
+import { useEffect, useState } from 'react';
+import { analyzeCreativeDna, applyCreativeDna, fileToDataUrl, hasKoreanDna, localizeCreativeDna } from '../../lib/creativeDnaApi';
 import { supabase } from '../../lib/supabaseClient';
 import type { Project } from '../../types';
 
@@ -25,6 +25,26 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
     const { data } = await supabase.from('projects').select('*').eq('id', project.id).single();
     return data as Project | null;
   }
+
+  // Projects analyzed before Korean display fields existed only have the
+  // English Creative DNA. Backfill the Korean mirrors once, lazily, the
+  // first time the project is opened — this only adds "...Ko" fields and
+  // never touches the English data used for storyboard generation.
+  useEffect(() => {
+    if (!dna || hasKoreanDna(dna)) return;
+    let cancelled = false;
+    localizeCreativeDna(project.id)
+      .then(async () => {
+        if (cancelled) return;
+        const updated = await refreshProject();
+        if (updated && !cancelled) onApplied([], updated);
+      })
+      .catch((err) => {
+        console.warn('Failed to localize Creative DNA:', err);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id, dna]);
 
   async function handleImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -135,11 +155,11 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
 
       {dna && (
         <div className="dna-result">
-          <span className="field-label">Visual Language</span>
+          <span className="field-label">비주얼 톤</span>
           <div className="dna-scores">
             {dna.visualLanguage.map((v) => (
               <div className="dna-score-row" key={v.label}>
-                <span className="dna-score-label">{v.label}</span>
+                <span className="dna-score-label">{v.labelKo ?? v.label}</span>
                 <div className="dna-score-bar">
                   <div className="dna-score-fill" style={{ width: `${Math.max(0, Math.min(100, v.score))}%` }} />
                 </div>
@@ -148,15 +168,15 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
             ))}
           </div>
 
-          <DnaList title="Camera DNA" items={dna.cameraDna} />
-          <DnaList title="Lighting DNA" items={dna.lightingDna} />
-          <DnaList title="Composition DNA" items={dna.compositionDna} />
-          <DnaList title="Edit / Rhythm DNA" items={dna.editRhythmDna} />
-          <DnaList title="Color / Mood" items={dna.colorMood} />
-          <DnaList title="Creative Principles" items={dna.creativePrinciples} />
+          <DnaList title="카메라 연출" items={dna.cameraDna} itemsKo={dna.cameraDnaKo} />
+          <DnaList title="조명" items={dna.lightingDna} itemsKo={dna.lightingDnaKo} />
+          <DnaList title="화면 구성" items={dna.compositionDna} itemsKo={dna.compositionDnaKo} />
+          <DnaList title="편집 / 리듬" items={dna.editRhythmDna} itemsKo={dna.editRhythmDnaKo} />
+          <DnaList title="컬러 / 무드" items={dna.colorMood} itemsKo={dna.colorMoodKo} />
+          <DnaList title="크리에이티브 방향" items={dna.creativePrinciples} itemsKo={dna.creativePrinciplesKo} />
 
           <button type="button" className="btn-primary btn-block" onClick={handleApplyDna} disabled={applying}>
-            {applying ? 'DNA를 적용하는 중...' : 'Apply DNA to Storyboard'}
+            {applying ? 'DNA를 적용하는 중...' : '스토리보드에 DNA 적용'}
           </button>
         </div>
       )}
@@ -164,13 +184,13 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
   );
 }
 
-function DnaList({ title, items }: { title: string; items: string[] }) {
+function DnaList({ title, items, itemsKo }: { title: string; items: string[]; itemsKo?: string[] }) {
   if (items.length === 0) return null;
   return (
     <div className="dna-list">
       <span className="dna-list-title">{title}</span>
       <ul>
-        {items.map((item, i) => <li key={i}>{item}</li>)}
+        {items.map((item, i) => <li key={i}>{itemsKo?.[i] ?? item}</li>)}
       </ul>
     </div>
   );

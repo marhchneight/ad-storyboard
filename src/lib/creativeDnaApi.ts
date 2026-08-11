@@ -34,6 +34,32 @@ export async function analyzeCreativeDna(
   return json.dna as CreativeDna;
 }
 
+/**
+ * Backfills Korean display fields onto a project's already-stored (English-only)
+ * Creative DNA. Only adds the "...Ko" fields — never touches the English fields
+ * used for storyboard generation.
+ */
+export async function localizeCreativeDna(projectId: string): Promise<CreativeDna> {
+  const headers = await authHeader();
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/creative-dna`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ projectId, localizeOnly: true }),
+  });
+  const json = await res.json().catch(() => ({ error: '한국어 표시 정보를 가져오지 못했습니다.' }));
+  if (!res.ok) throw new Error(json.error ?? '한국어 표시 정보를 가져오지 못했습니다.');
+  return json.dna as CreativeDna;
+}
+
+/** True once every Creative DNA field has its Korean display mirror. */
+export function hasKoreanDna(dna: CreativeDna): boolean {
+  return (
+    dna.visualLanguage.every((v) => !!v.labelKo) &&
+    !!dna.cameraDnaKo && !!dna.lightingDnaKo && !!dna.compositionDnaKo &&
+    !!dna.editRhythmDnaKo && !!dna.colorMoodKo && !!dna.creativePrinciplesKo
+  );
+}
+
 function summarizeDna(dna: CreativeDna): string {
   const parts = [
     dna.cameraDna.length > 0 ? `카메라: ${dna.cameraDna.join('; ')}` : null,
