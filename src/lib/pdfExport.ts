@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import type { Project, Cut } from '../types';
+import { downloadBlob } from './download';
 
 const KOREAN_FONT_URL = '/fonts/Pretendard-Regular.ttf';
 const KOREAN_FONT_NAME = 'Pretendard';
@@ -76,15 +77,5 @@ export async function downloadCutImage(cut: Cut, index: number): Promise<void> {
   if (!cut.image_url) return;
   const res = await fetch(cut.image_url);
   const blob = await res.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = `cut-${index + 1}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
+  downloadBlob(blob, `cut-${index + 1}.png`);
 }

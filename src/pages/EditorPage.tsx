@@ -13,6 +13,8 @@ import { supabase } from '../lib/supabaseClient';
 import { useCuts } from '../hooks/useCuts';
 import SortableCutCard from '../components/SortableCutCard';
 import { buildStoryboardPdf } from '../lib/pdfExport';
+import { buildImagesZip, buildImagesZipFilename } from '../lib/imageZipExport';
+import { downloadBlob } from '../lib/download';
 import {
   applyDirectorPreset, askTheDirector, applyMakeItCrazy, type DirectorPreset,
 } from '../lib/directorApi';
@@ -27,6 +29,8 @@ export default function EditorPage() {
   const [overallPrompt, setOverallPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [zipping, setZipping] = useState(false);
+  const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
   const [directing, setDirecting] = useState(false);
   const [directorInstruction, setDirectorInstruction] = useState('');
   const [lastChanges, setLastChanges] = useState<string[] | null>(null);
@@ -201,6 +205,32 @@ export default function EditorPage() {
     }
   }
 
+  async function handleDownloadAllImages() {
+    if (!project) return;
+    setError(null);
+    setZipping(true);
+    setZipProgress(null);
+    try {
+      const { blob, succeededCount, failedSceneNumbers } = await buildImagesZip(
+        cuts,
+        (done, total) => setZipProgress({ done, total }),
+      );
+      if (!blob) {
+        setError('다운로드할 이미지가 없습니다.');
+        return;
+      }
+      downloadBlob(blob, buildImagesZipFilename(project));
+      if (failedSceneNumbers.length > 0) {
+        setError(`${succeededCount}개의 이미지를 다운로드했습니다. ${failedSceneNumbers.join(', ')}번 컷 이미지는 불러오지 못했습니다.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setZipping(false);
+      setZipProgress(null);
+    }
+  }
+
   if (!project) return <div className="page-shell">로딩 중...</div>;
 
   return (
@@ -213,6 +243,11 @@ export default function EditorPage() {
         <div className="page-header-actions">
           <button type="button" className="btn-secondary" onClick={handleUndo} disabled={history.length === 0 || directing}>
             Undo
+          </button>
+          <button type="button" className="btn-secondary" onClick={handleDownloadAllImages} disabled={zipping}>
+            {zipping
+              ? (zipProgress ? `이미지 준비 중... ${zipProgress.done}/${zipProgress.total}` : '이미지 준비 중...')
+              : '이미지 전체 다운로드'}
           </button>
           <button type="button" className="btn-primary" onClick={handleExportPdf} disabled={exporting}>
             {exporting ? 'PDF 생성 중...' : 'PDF로 내보내기'}
