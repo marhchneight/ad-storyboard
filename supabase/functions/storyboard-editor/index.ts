@@ -12,10 +12,35 @@ const OUTPUT_CONTRACT =
   '"duration": number, "shotSize": string, "lens": string, "angle": string, "movement": string, ' +
   '"composition": string, "visual": string, "action": string, "lighting": string, "mood": string, ' +
   '"location": string, "props": string, "dialogue": string, "sfx": string, "transition": string, ' +
-  '"purpose": string}]}. "changesSummary" is 2-5 short bullet strings describing what changed, written for ' +
-  'the person who commissioned this (e.g. "Opening shot replaced with a more dynamic angle"). Keep "shots" ' +
-  'in narrative order starting at shotNumber 1. You may add, remove, or reorder shots if the instruction ' +
-  'calls for it. Never wrap the JSON in markdown code fences.';
+  '"purpose": string, "characterIds": string[], "productIds": string[], "locationId": (string or null)}]}. ' +
+  '"changesSummary" is 2-5 short bullet strings describing what changed, written for the person who ' +
+  'commissioned this (e.g. "Opening shot replaced with a more dynamic angle"). "characterIds"/"productIds"/' +
+  '"locationId" must reference the persistent entity ids listed below and must stay exactly the same as each ' +
+  'shot\'s current ids unless the direction explicitly changes which entity appears in that shot (e.g. a ' +
+  'costume change, a new location) — never invent a new entity id. Keep "shots" in narrative order starting ' +
+  'at shotNumber 1. You may add, remove, or reorder shots if the instruction calls for it. Never wrap the ' +
+  'JSON in markdown code fences.';
+
+interface VisualBibleSummaryEntity {
+  id: string;
+  label: string;
+}
+
+interface VisualBibleForSummary {
+  characters?: VisualBibleSummaryEntity[];
+  products?: VisualBibleSummaryEntity[];
+  locations?: VisualBibleSummaryEntity[];
+}
+
+function summarizeVisualBible(bible: VisualBibleForSummary): string {
+  const fmt = (items?: VisualBibleSummaryEntity[]) => (items ?? []).map((e) => `${e.id}: ${e.label}`).join('; ');
+  const parts = [
+    bible.characters?.length ? `Characters: ${fmt(bible.characters)}` : null,
+    bible.products?.length ? `Products: ${fmt(bible.products)}` : null,
+    bible.locations?.length ? `Locations: ${fmt(bible.locations)}` : null,
+  ].filter((p): p is string => !!p);
+  return parts.length > 0 ? parts.join('\n') : '(no persistent entities defined for this project)';
+}
 
 const PRESET_DIRECTIONS: Record<string, string> = {
   more_cinematic:
@@ -72,6 +97,9 @@ interface RevisedShot {
   sfx: string;
   transition: string;
   purpose: string;
+  characterIds?: string[];
+  productIds?: string[];
+  locationId?: string | null;
 }
 
 interface EditorOutput {
@@ -128,32 +156,42 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'no cuts found' }, 404);
     }
 
-    const shotsContext = existingCuts.map((c: Record<string, unknown>, i: number) => ({
-      shotNumber: i + 1,
-      duration: c.duration_seconds,
-      shotSize: c.shot_size,
-      lens: c.lens,
-      angle: c.angle,
-      movement: c.movement,
-      composition: c.composition,
-      visual: c.scene_description,
-      action: c.action,
-      lighting: c.lighting,
-      mood: c.mood,
-      location: c.location,
-      props: c.props,
-      dialogue: c.dialogue,
-      sfx: c.sfx,
-      transition: c.transition,
-      purpose: c.purpose,
-    }));
+    const shotsContext = existingCuts.map((c: Record<string, unknown>, i: number) => {
+      const refs = (c.entity_refs as { characters?: string[]; products?: string[]; location?: string | null }) ?? {};
+      return {
+        shotNumber: i + 1,
+        duration: c.duration_seconds,
+        shotSize: c.shot_size,
+        lens: c.lens,
+        angle: c.angle,
+        movement: c.movement,
+        composition: c.composition,
+        visual: c.scene_description,
+        action: c.action,
+        lighting: c.lighting,
+        mood: c.mood,
+        location: c.location,
+        props: c.props,
+        dialogue: c.dialogue,
+        sfx: c.sfx,
+        transition: c.transition,
+        purpose: c.purpose,
+        characterIds: refs.characters ?? [],
+        productIds: refs.products ?? [],
+        locationId: refs.location ?? null,
+      };
+    });
 
     const directionInstruction = preset
       ? PRESET_DIRECTIONS[preset]
       : `Follow this instruction from the client: "${instruction}"`;
 
+    const visualBible = (project.visual_bible as VisualBibleForSummary) ?? {};
+
     const userPrompt = `${OUTPUT_CONTRACT}\n\n` +
       `Product / concept (do not change): ${project.overall_prompt}\n\n` +
+      `Persistent project entities (visual definitions live elsewhere and must not be altered unless the ` +
+      `direction explicitly requires it):\n${summarizeVisualBible(visualBible)}\n\n` +
       `Current shot list:\n${JSON.stringify(shotsContext)}\n\n` +
       `Direction to apply: ${directionInstruction}`;
 
@@ -218,6 +256,11 @@ Deno.serve(async (req) => {
         sfx: shot.sfx ?? '',
         transition: shot.transition ?? '',
         purpose: shot.purpose ?? '',
+        entity_refs: {
+          characters: Array.isArray(shot.characterIds) ? shot.characterIds : [],
+          products: Array.isArray(shot.productIds) ? shot.productIds : [],
+          location: typeof shot.locationId === 'string' ? shot.locationId : null,
+        },
         image_url: null,
         generation_status: 'idle',
       }).eq('id', existingCuts[i].id);
@@ -244,6 +287,11 @@ Deno.serve(async (req) => {
         sfx: shot.sfx ?? '',
         transition: shot.transition ?? '',
         purpose: shot.purpose ?? '',
+        entity_refs: {
+          characters: Array.isArray(shot.characterIds) ? shot.characterIds : [],
+          products: Array.isArray(shot.productIds) ? shot.productIds : [],
+          location: typeof shot.locationId === 'string' ? shot.locationId : null,
+        },
       }));
       await supabase.from('cuts').insert(extraRows);
     } else if (existingCuts.length > newShots.length) {
