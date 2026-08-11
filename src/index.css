@@ -318,13 +318,13 @@ a.btn-primary {
 
 .cut-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 860px;
   border-collapse: collapse;
 }
 
 .cut-table th,
 .cut-table td {
-  padding: 20px;
+  padding: 14px 12px;
   vertical-align: top;
   text-align: left;
   border-bottom: 1px solid #E8E8E8;
@@ -363,12 +363,12 @@ a.btn-primary {
 }
 
 .cut-cell-image {
-  width: 190px;
+  width: 224px;
 }
 
 .cut-thumb {
-  width: 160px;
-  height: 160px;
+  width: 204px;
+  height: 204px;
   object-fit: cover;
   display: block;
   margin-bottom: 10px;
@@ -399,7 +399,12 @@ a.btn-primary {
 }
 
 .cut-cell-actions {
-  width: 90px;
+  width: 112px;
+}
+
+.cut-cell-actions .btn-text,
+.shot-ai-edit summary {
+  white-space: nowrap;
 }
 
 /* Idea / Director brief */
