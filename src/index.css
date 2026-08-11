@@ -402,6 +402,9 @@ a.btn-primary {
 
 .cut-cell-actions {
   width: 90px;
+}
+
+.cut-actions-group {
   display: flex;
   flex-direction: column;
   gap: 6px;

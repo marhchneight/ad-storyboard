@@ -145,10 +145,12 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
         {error && <p className="error">{error}</p>}
       </td>
       <td className="cut-cell cut-cell-actions">
-        <button type="button" className="btn-text" onClick={handleRemove}>삭제</button>
-        {cut.image_url && (
-          <button type="button" onClick={handleDownload} className="btn-text cut-download-btn">다운로드</button>
-        )}
+        <div className="cut-actions-group">
+          <button type="button" className="btn-text" onClick={handleRemove}>삭제</button>
+          {cut.image_url && (
+            <button type="button" onClick={handleDownload} className="btn-text cut-download-btn">다운로드</button>
+          )}
+        </div>
       </td>
     </>
   );
