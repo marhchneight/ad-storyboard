@@ -13,7 +13,10 @@ const OUTPUT_CONTRACT =
   '"composition": string, "visual": string, "action": string, "lighting": string, "mood": string, ' +
   '"location": string, "props": string, "dialogue": string, "sfx": string, "transition": string, ' +
   '"purpose": string, "imagePrompt": string, "characterIds": string[], "productIds": string[], ' +
-  '"locationId": (string or null)}]}. "changesSummary" is 2-5 short Korean bullet strings describing what ' +
+  '"locationId": (string or null)}]}. Each shot\'s "location" field is a short KOREAN phrase naming where ' +
+  'this shot takes place for a human reading the shot list (e.g. "모던한 아파트 거실") — do not confuse it ' +
+  'with the persistent location entity (referenced only via "locationId"), which stays in English elsewhere. ' +
+  '"changesSummary" is 2-5 short Korean bullet strings describing what ' +
   'changed, written for the person who commissioned this (e.g. "오프닝 샷을 더 역동적인 앵글로 교체"). ' +
   '"imagePrompt" is a separate English-only field per shot for an image-generation model (see language ' +
   'policy below). "characterIds"/"productIds"/"locationId" must reference the persistent entity ids listed ' +

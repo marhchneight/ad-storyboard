@@ -50,9 +50,12 @@ const DIRECTOR_OUTPUT_CONTRACT =
   'Every field inside "visualBible" (globalStyle, and every field of every character/product/location) must ' +
   'ALWAYS be written in English — never Korean — regardless of the language of any other field in this ' +
   'response; see language policy below. "visual" is the primary scene description, written for a Korean ' +
-  'production team reading a shot list (see language policy below). "dialogue" is any spoken line, copy, or ' +
-  'voice-over for that shot (leave "" if silent). "duration" is seconds as a number. "imagePrompt" is a ' +
-  'separate English-only field for an image-generation model (see language policy below). ' +
+  'production team reading a shot list (see language policy below). Each shot\'s own "location" field is a ' +
+  'short KOREAN phrase naming where this shot takes place for a human reading the shot list (e.g. ' +
+  '"모던한 아파트 거실") — this is different from "visualBible.locations", which stays in English; do not ' +
+  'copy an English visualBible location label into a shot\'s "location" field. "dialogue" is any spoken ' +
+  'line, copy, or voice-over for that shot (leave "" if silent). "duration" is seconds as a number. ' +
+  '"imagePrompt" is a separate English-only field for an image-generation model (see language policy below). ' +
   '"characterIds"/"productIds"/"locationId" must reference ids defined in "visualBible" — use [] / null when ' +
   'no persistent entity applies to that shot. Keep "shots" in narrative order starting at shotNumber 1. Never ' +
   'wrap the JSON in markdown code fences.';
@@ -196,7 +199,10 @@ const SHOTS_ONLY_OUTPUT_CONTRACT =
   '"locationId": (string or null)}]}. Every field inside "visualBible" (globalStyle, and every field of ' +
   'every character/product/location) must ALWAYS be written in English — never Korean — regardless of the ' +
   'language of any other field in this response; see language policy below. "visual" is the primary scene ' +
-  'description, written for a Korean production team reading a shot list (see language policy below). ' +
+  'description, written for a Korean production team reading a shot list (see language policy below). Each ' +
+  'shot\'s own "location" field is a short KOREAN phrase naming where this shot takes place for a human ' +
+  'reading the shot list (e.g. "모던한 아파트 거실") — this is different from "visualBible.locations", which ' +
+  'stays in English; do not copy an English visualBible location label into a shot\'s "location" field. ' +
   '"dialogue" is any spoken line, copy, or voice-over for that shot (leave "" if silent). "duration" is ' +
   'seconds as a number. "imagePrompt" is a separate English-only field for an image-generation model (see ' +
   'language policy below). "characterIds"/"productIds"/"locationId" must reference ids defined in ' +

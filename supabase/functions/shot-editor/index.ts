@@ -11,8 +11,11 @@ const OUTPUT_CONTRACT =
   '"composition": string, "visual": string, "action": string, "lighting": string, "mood": string, ' +
   '"location": string, "props": string, "dialogue": string, "sfx": string, "transition": string, ' +
   '"purpose": string, "imagePrompt": string, "characterIds": string[], "productIds": string[], ' +
-  '"locationId": (string or null)}}. "imagePrompt" is a separate English-only field for an image-generation ' +
-  'model (see language policy below). "characterIds"/"productIds"/"locationId" must reference the persistent ' +
+  '"locationId": (string or null)}}. The "location" field is a short KOREAN phrase naming where this shot ' +
+  'takes place for a human reading the shot list (e.g. "모던한 아파트 거실") — do not confuse it with the ' +
+  'persistent location entity (referenced only via "locationId"), which stays in English elsewhere. ' +
+  '"imagePrompt" is a separate English-only field for an image-generation model (see language policy below). ' +
+  '"characterIds"/"productIds"/"locationId" must reference the persistent ' +
   'entity ids listed below and must stay exactly the same as the current shot\'s ids unless the edit ' +
   'instruction explicitly changes which entity appears in this shot. Never invent a new entity id. Never ' +
   'wrap the JSON in markdown code fences.';
