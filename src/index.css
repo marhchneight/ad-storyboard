@@ -112,6 +112,13 @@ p {
   margin-bottom: 12px;
 }
 
+.dna-summary-link {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: #666666;
+}
+
 /* Cards */
 
 .card {
@@ -366,6 +373,10 @@ a.btn-primary {
   width: 224px;
 }
 
+.cut-cell-image:has(.dna-applied[open]) {
+  width: 320px;
+}
+
 .cut-thumb {
   width: 204px;
   height: 204px;
@@ -545,33 +556,18 @@ a.btn-primary {
 
 .dna-applied-label {
   display: block;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: #666666;
   text-decoration: underline;
   text-underline-offset: 3px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .dna-applied-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.dna-tag {
-  display: inline-block;
+  display: block;
   font-size: 0.72rem;
-  padding: 2px 8px;
-  border: 1px solid #E8E8E8;
-  border-radius: 999px;
-  background-color: #FAFAF8;
   color: #111111;
-  white-space: nowrap;
-}
-
-.dna-tag-more {
-  color: #666666;
-  border-style: dashed;
+  overflow-wrap: break-word;
 }
 
 .dna-applied-detail {

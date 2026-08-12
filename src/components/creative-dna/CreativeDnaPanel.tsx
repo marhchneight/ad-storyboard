@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { analyzeCreativeDna, applyCreativeDna, fileToDataUrl, hasKoreanDna, localizeCreativeDna } from '../../lib/creativeDnaApi';
+import { scrollToAndHighlightAppliedCuts } from '../../lib/dnaHighlight';
 import { supabase } from '../../lib/supabaseClient';
 import type { Project } from '../../types';
 
@@ -129,14 +130,7 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
   }
 
   function handleViewAppliedCuts() {
-    const cutId = applyStatus?.firstAppliedCutId;
-    if (!cutId) return;
-    const row = document.querySelector<HTMLElement>(`[data-cut-id="${cutId}"]`);
-    row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    document.querySelectorAll<HTMLElement>('[data-cut-dna-applied="true"]').forEach((el) => {
-      el.classList.add('cut-dna-highlight');
-      setTimeout(() => el.classList.remove('cut-dna-highlight'), 1600);
-    });
+    if (applyStatus?.firstAppliedCutId) scrollToAndHighlightAppliedCuts(applyStatus.firstAppliedCutId);
   }
 
   return (

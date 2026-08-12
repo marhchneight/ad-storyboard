@@ -15,6 +15,7 @@ import SortableCutCard from '../components/SortableCutCard';
 import { buildStoryboardPdf } from '../lib/pdfExport';
 import { buildImagesZip, buildImagesZipFilename } from '../lib/imageZipExport';
 import { downloadBlob } from '../lib/download';
+import { scrollToAndHighlightAppliedCuts } from '../lib/dnaHighlight';
 import {
   applyDirectorPreset, askTheDirector, applyMakeItCrazy, type DirectorPreset,
 } from '../lib/directorApi';
@@ -233,12 +234,21 @@ export default function EditorPage() {
 
   if (!project) return <div className="page-shell">로딩 중...</div>;
 
+  const dnaAppliedCount = cuts.filter((c) => c.applied_creative_dna.length > 0).length;
+  const firstDnaAppliedCutId = cuts.find((c) => c.applied_creative_dna.length > 0)?.id ?? null;
+
   return (
     <div className="page-shell">
       <div className="page-header">
         <div>
           <Link to="/" className="btn-text back-link">← Studio</Link>
           <h1>{project.title}</h1>
+          {dnaAppliedCount > 0 && (
+            <button type="button" className="btn-text dna-summary-link"
+              onClick={() => firstDnaAppliedCutId && scrollToAndHighlightAppliedCuts(firstDnaAppliedCutId)}>
+              레퍼런스 연출 · {dnaAppliedCount}/{cuts.length}컷 반영
+            </button>
+          )}
         </div>
         <div className="page-header-actions">
           <button type="button" className="btn-secondary" onClick={handleUndo} disabled={history.length === 0 || directing}>

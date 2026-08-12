@@ -93,6 +93,7 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
         {cut.image_url && (
           <button type="button" onClick={() => setShowLightbox(true)} className="btn-text cut-view-large-btn">크게 보기</button>
         )}
+        <AppliedDna cut={cut} />
         {cut.generation_status === 'failed' && (
           <p className="error">생성 실패</p>
         )}
@@ -124,7 +125,6 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
       </td>
       <td className="cut-cell cut-cell-details">
         <ShotDetails cut={cut} />
-        <AppliedDna cut={cut} />
         <details className="shot-ai-edit">
           <summary>AI 수정</summary>
           <div className="shot-ai-quick-actions">
@@ -193,8 +193,11 @@ function groupByCategory(tags: AppliedCreativeDnaTag[]): { category: CreativeDna
     .filter((g) => g.labels.length > 0);
 }
 
-// Compact secondary indicator — max 3 tags + "+N" in the summary, click to
-// expand the full breakdown. Not shown at all when this scene used none.
+// Compact secondary indicator — max 3 elements dot-joined + "+N" in the
+// summary, click to expand the full breakdown. Not shown at all when this
+// scene used none — the label is only ever true when
+// cut.applied_creative_dna (the same data storyboard/image generation
+// actually used) is non-empty.
 function AppliedDna({ cut }: { cut: Cut }) {
   const tags = cut.applied_creative_dna;
   if (tags.length === 0) return null;
@@ -202,18 +205,16 @@ function AppliedDna({ cut }: { cut: Cut }) {
   const visible = tags.slice(0, 3);
   const extra = tags.length - visible.length;
   const grouped = groupByCategory(tags);
+  const summaryText = visible.map((t) => t.labelKo).join(' · ') + (extra > 0 ? ` · +${extra}` : '');
 
   return (
     <details className="dna-applied">
       <summary>
-        <span className="dna-applied-label">레퍼런스 DNA 적용</span>
-        <span className="dna-applied-tags">
-          {visible.map((t) => <span className="dna-tag" key={t.key}>{t.labelKo}</span>)}
-          {extra > 0 && <span className="dna-tag dna-tag-more">+{extra}</span>}
-        </span>
+        <span className="dna-applied-label">레퍼런스 반영</span>
+        <span className="dna-applied-tags">{summaryText}</span>
       </summary>
       <div className="dna-applied-detail">
-        <span className="dna-applied-detail-heading">이 컷에 반영된 Creative DNA</span>
+        <span className="dna-applied-detail-heading">이 컷에 반영된 레퍼런스 요소</span>
         {grouped.map(({ category, labels }) => (
           <div className="dna-applied-category" key={category}>
             <span className="dna-applied-category-label">{DNA_CATEGORY_LABELS[category]}</span>
