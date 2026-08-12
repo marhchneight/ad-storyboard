@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listProjects } from '../hooks/useProjects';
 import { useAuth } from '../hooks/useAuth';
+import ThemeToggle from '../components/ThemeToggle';
 import type { Project } from '../types';
 
 export default function ProjectListPage() {
@@ -28,6 +29,7 @@ export default function ProjectListPage() {
         <div className="page-header-actions">
           <Link to="/projects/new" className="btn-primary">새 프로젝트</Link>
           <button className="btn-text" onClick={() => signOut()}>로그아웃</button>
+          <ThemeToggle />
         </div>
       </div>
 

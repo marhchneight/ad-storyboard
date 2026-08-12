@@ -22,6 +22,7 @@ import {
 import { pickRandomConstraint } from '../lib/creativeRoulette';
 import DirectorControls from '../components/director/DirectorControls';
 import CreativeDnaPanel from '../components/creative-dna/CreativeDnaPanel';
+import ThemeToggle from '../components/ThemeToggle';
 import type { Cut, Project } from '../types';
 
 export default function EditorPage() {
@@ -314,6 +315,7 @@ export default function EditorPage() {
           <button type="button" className="btn-primary" onClick={handleExportPdf} disabled={exporting}>
             {exporting ? 'PDF 생성 중...' : 'PDF로 내보내기'}
           </button>
+          <ThemeToggle />
         </div>
       </div>
 

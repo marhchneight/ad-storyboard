@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function LoginPage() {
   const { signIn, signUp } = useAuth();
@@ -25,6 +26,9 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page">
+      <div className="auth-page-toggle">
+        <ThemeToggle />
+      </div>
       <div className="auth-card">
         <p className="eyebrow">Ad Storyboard Studio</p>
         <h1>Welcome back.</h1>

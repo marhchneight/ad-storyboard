@@ -10,6 +10,7 @@ import ProductMode from '../components/home/ProductMode';
 import CreativeDirectionPanel from '../components/home/CreativeDirectionPanel';
 import DirectorsRoom from '../components/home/DirectorsRoom';
 import RecentProjects from '../components/home/RecentProjects';
+import ThemeToggle from '../components/ThemeToggle';
 import type {
   AspectRatio, CreativeBrief, CreativeDna, CreativeRisk, CreativeTreatment, DirectingOption, Project,
   SceneCountMode, StoryboardStyle, TargetDurationSeconds,
@@ -216,6 +217,7 @@ export default function HomePage() {
         <div className="page-header-actions">
           <Link to="/projects" className="btn-text">프로젝트</Link>
           <button className="btn-text" onClick={() => signOut()}>로그아웃</button>
+          <ThemeToggle />
         </div>
       </div>
 

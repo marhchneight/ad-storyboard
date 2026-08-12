@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createProject, directStoryboard } from '../hooks/useProjects';
+import ThemeToggle from '../components/ThemeToggle';
 import type { CreativeBrief, Duration, Platform, StoryboardStyle } from '../types';
 
 const DIRECTOR_LOADING_MESSAGES = [
@@ -98,6 +99,9 @@ export default function NewProjectPage() {
 
   return (
     <div className="page-shell page-shell-narrow">
+      <div className="page-header-actions page-header-actions-standalone">
+        <ThemeToggle />
+      </div>
       <p className="eyebrow">Idea</p>
       <h1>{manualMode ? '새 스토리보드' : 'AI 감독에게 브리프 전달하기'}</h1>
       {!manualMode && (
