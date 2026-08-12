@@ -1,15 +1,26 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 import ThemeToggle from '../components/ThemeToggle';
+import DitheringSwirlBackground from '../components/DitheringSwirlBackground';
+
+// Mirrors the --bg / --ink token values in index.css for each theme, so the
+// swirl reads as the same studio's day/night palette rather than a separate look.
+const SWIRL_PALETTE = {
+  light: { back: '#FAFAF8', front: '#111111', opacity: 0.16 },
+  dark: { back: '#0B0B0B', front: '#F2F2F2', opacity: 0.2 },
+};
 
 export default function LoginPage() {
   const { signIn, signUp } = useAuth();
+  const { theme } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const swirl = SWIRL_PALETTE[theme];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,6 +37,13 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page">
+      <DitheringSwirlBackground
+        colorBack={swirl.back}
+        colorFront={swirl.front}
+        opacity={swirl.opacity}
+        speed={0.3}
+        pxSize={5}
+      />
       <div className="auth-page-toggle">
         <ThemeToggle />
       </div>
