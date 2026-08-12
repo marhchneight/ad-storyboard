@@ -17,6 +17,8 @@ export interface CreativeBrief {
   visualKeywords?: string;
   reference?: string;
   conceptDescription?: string;
+  /** Brand Intelligence context from the "제품" tab, carried through so storyboard generation keeps the same brand understanding. */
+  brandContext?: BrandAnalysis;
 }
 
 export interface CreativeDnaScore {
@@ -67,6 +69,50 @@ export interface CreativeTreatment {
 export interface CreativeConcept {
   title: string;
   concept: string;
+  /** Short "why this fits the brand" note, grounded in the brand analysis — absent when generated without one. */
+  reason?: string;
+}
+
+export interface BrandIntelligence {
+  brandName: string;
+  category: string;
+  primaryProducts: string[];
+  purchaseSituation: string;
+  usageContext: string;
+  consumerContext: string;
+  valuePropositions: string[];
+  positioning: string;
+  distributionChannels: string;
+  distinctiveAssets: string[];
+  brandTone: string;
+  /** Widely-known, safe-to-state facts about the brand. */
+  confirmedFacts: string[];
+  /** Plausible but unverified inferences — never presented to the model/user as confirmed fact. */
+  reasonableInferences: string[];
+}
+
+export interface CategoryContext {
+  categoryTrends: string[];
+  overusedPatterns: string[];
+  opportunityAreas: string[];
+}
+
+export interface TrendContext {
+  /** False when no external search was available — every field below is then intentionally empty, not fabricated. */
+  recentDataAvailable: boolean;
+  recentCampaigns: string[];
+  recentProducts: string[];
+  currentBrandMessage: string;
+  recentContentStyle: string;
+  recentRepositioning: string;
+  categoryAdTrends: string[];
+}
+
+export interface BrandAnalysis {
+  brandIntelligence: BrandIntelligence;
+  categoryContext: CategoryContext;
+  trendContext: TrendContext;
+  creativeOpportunities: string[];
 }
 
 export type CreativeDnaCategory =

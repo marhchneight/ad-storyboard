@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
-import { generateCreativeDirection, suggestConcepts, type SceneCountParams } from '../../lib/creativeDirectionApi';
-import type { CreativeBrief, CreativeConcept, CreativeTreatment } from '../../types';
+import { analyzeBrand, generateCreativeDirection, suggestConcepts, type SceneCountParams } from '../../lib/creativeDirectionApi';
+import type { BrandAnalysis, CreativeBrief, CreativeConcept, CreativeTreatment } from '../../types';
+
+type SuggestStage = 'idle' | 'analyzing' | 'ideating';
 
 interface Props {
   busy: boolean;
@@ -21,25 +23,38 @@ export default function ProductMode({
   const [mood, setMood] = useState('');
   const [platform, setPlatform] = useState('');
   const [concepts, setConcepts] = useState<CreativeConcept[] | null>(null);
-  const [suggesting, setSuggesting] = useState(false);
+  const [brandAnalysis, setBrandAnalysis] = useState<BrandAnalysis | null>(null);
+  const [stage, setStage] = useState<SuggestStage>('idle');
+  const suggesting = stage !== 'idle';
 
   async function handleSuggest(e: React.FormEvent) {
     e.preventDefault();
     if (!product.trim() || suggesting) return;
-    setSuggesting(true);
     setConcepts(null);
+    setBrandAnalysis(null);
     try {
-      const result = await suggestConcepts({
+      setStage('analyzing');
+      const analysis = await analyzeBrand({
         product: product.trim(),
         targetAudience: targetAudience.trim() || undefined,
         mood: mood.trim() || undefined,
         platform: platform.trim() || undefined,
       });
+      setBrandAnalysis(analysis);
+
+      setStage('ideating');
+      const result = await suggestConcepts({
+        product: product.trim(),
+        targetAudience: targetAudience.trim() || undefined,
+        mood: mood.trim() || undefined,
+        platform: platform.trim() || undefined,
+        brandContext: analysis,
+      });
       setConcepts(result);
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
     } finally {
-      setSuggesting(false);
+      setStage('idle');
     }
   }
 
@@ -53,6 +68,7 @@ export default function ProductMode({
         mood: mood.trim() || undefined,
         platform: (platform.trim() || undefined) as CreativeBrief['platform'],
         conceptDescription: `${c.title}: ${c.concept}`,
+        brandContext: brandAnalysis ?? undefined,
       };
       const freeformIdea = `${c.title}. ${c.concept}`;
       const treatment = await generateCreativeDirection({ freeformIdea, brief, ...sceneCountParams });
@@ -63,6 +79,12 @@ export default function ProductMode({
       onBusyChange(false);
     }
   }
+
+  const suggestLabel = stage === 'analyzing'
+    ? '브랜드를 알아보고 있어요...'
+    : stage === 'ideating'
+      ? '아이디어를 구상하는 중...'
+      : '아이디어가 없으신가요? 영감 받기 ✦';
 
   return (
     <div className="start-mode-panel">
@@ -88,7 +110,7 @@ export default function ProductMode({
         {aspectRatioField}
         {storyboardLengthField}
         <button type="submit" className="btn-secondary btn-block" disabled={suggesting || busy || !product.trim()}>
-          {suggesting ? '컨셉을 구상하는 중...' : '아이디어가 없으신가요? 영감 받기 ✦'}
+          {suggestLabel}
         </button>
       </form>
 
@@ -99,6 +121,7 @@ export default function ProductMode({
               <span className="concept-card-index">{String(i + 1).padStart(2, '0')}</span>
               <h3>{c.title}</h3>
               <p>{c.concept}</p>
+              {c.reason && <p className="concept-card-reason">{c.reason}</p>}
             </button>
           ))}
         </div>

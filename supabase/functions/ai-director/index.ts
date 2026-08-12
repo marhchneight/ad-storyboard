@@ -329,6 +329,39 @@ async function fetchShotsOnly(userPrompt: string): Promise<ShotsOnlyResult | { e
   return parsed;
 }
 
+// Carries the "제품" tab's Brand Intelligence analysis (see brand-intelligence
+// edge function) through to the initial storyboard, so the same grounded
+// brand understanding used to pitch the concept also shapes the shots —
+// instead of the storyboard AI starting from the brand name alone again.
+function buildBrandContextSummary(brandContext: Record<string, unknown>): string {
+  const bi = brandContext.brandIntelligence as Record<string, unknown> | undefined;
+  const opportunities = brandContext.creativeOpportunities;
+  const parts: string[] = [];
+  if (bi) {
+    const fields: [string, string][] = [
+      ['category', 'Category'],
+      ['purchaseSituation', 'Purchase situation'],
+      ['usageContext', 'Usage context'],
+      ['distributionChannels', 'Distribution channels'],
+      ['brandTone', 'Brand tone'],
+    ];
+    for (const [key, label] of fields) {
+      const value = bi[key];
+      if (typeof value === 'string' && value.trim()) parts.push(`${label}: ${value.trim()}`);
+    }
+    if (Array.isArray(bi.distinctiveAssets) && bi.distinctiveAssets.length > 0) {
+      parts.push(`Distinctive assets: ${bi.distinctiveAssets.join(', ')}`);
+    }
+  }
+  if (Array.isArray(opportunities) && opportunities.length > 0) {
+    parts.push(`Creative opportunities: ${opportunities.join('; ')}`);
+  }
+  return parts.length > 0
+    ? `\n\nBrand context (from prior brand analysis — keep the storyboard grounded in this, not just the ` +
+      `brand name):\n${parts.join('\n')}`
+    : '';
+}
+
 function buildBriefSummary(brief: Record<string, unknown>, freeformIdea: string): string {
   const lines: string[] = [];
   if (freeformIdea.trim()) lines.push(`Free-form idea: ${freeformIdea.trim()}`);
@@ -348,7 +381,11 @@ function buildBriefSummary(brief: Record<string, unknown>, freeformIdea: string)
     const value = brief[key];
     if (typeof value === 'string' && value.trim()) lines.push(`${label}: ${value.trim()}`);
   }
-  return lines.length > 0 ? lines.join('\n') : '(브리프 정보 없음 — 자유롭게 해석하세요)';
+  const summary = lines.length > 0 ? lines.join('\n') : '(브리프 정보 없음 — 자유롭게 해석하세요)';
+  const brandContext = brief.brandContext;
+  return (brandContext && typeof brandContext === 'object')
+    ? summary + buildBrandContextSummary(brandContext as Record<string, unknown>)
+    : summary;
 }
 
 Deno.serve(async (req) => {

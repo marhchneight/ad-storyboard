@@ -29,9 +29,28 @@ const OUTPUT_CONTRACT =
   'Keep "shots" in narrative order starting at shotNumber 1. You may add, remove, or reorder shots if the ' +
   'instruction calls for it. Never wrap the JSON in markdown code fences.';
 
+const PRODUCT_CONTEXT_INSTRUCTIONS =
+  'Product-context priority: before writing or revising any shot\'s "visual", "action", "props", or ' +
+  '"imagePrompt", first infer this ad\'s product context from "Product / concept" below — what is actually ' +
+  'being advertised, its category, and what foods/objects/props would plausibly and naturally appear given ' +
+  'that product, Korean consumer context, and this shot\'s narrative purpose. Apply this priority order, ' +
+  'highest first, when deciding what appears in a shot: (1) an explicit instruction from the client — always ' +
+  'honor it even if it produces an unusual combination (e.g. an explicit request to mix the product with an ' +
+  'unrelated ingredient is valid content, not a mistake); (2) this product/brand context; (3) the scene\'s ' +
+  'narrative and objects it strictly requires; (4) established character/product continuity; (5) Creative DNA ' +
+  '(if a profile is given below) — Creative DNA controls HOW a shot is visualized (camera, lighting, ' +
+  'composition, color, cut rhythm), never WHAT product-relevant objects exist in it; (6) secondary decorative ' +
+  'props, only when they do not conflict with (1)-(4). Before finalizing each shot, silently check: does every ' +
+  'prominent object you are about to describe have a plausible reason to exist given the advertised product ' +
+  'and this shot\'s purpose? Never add an object merely to make a shot visually richer, and never carry an ' +
+  'object into a shot only because a Creative DNA reference happened to be shot with it — Creative DNA is ' +
+  'style guidance, never scene content.';
+
 const CREATIVE_DNA_INSTRUCTIONS =
   'Creative DNA selection: you are given a Creative DNA profile below (extracted from a reference the client ' +
-  'liked). For every shot, explicitly decide which Creative DNA elements you actually drew on for that ' +
+  'liked, already stripped of the reference\'s literal subject matter — treat everything in it as pure ' +
+  'directing technique, never as objects to place in a shot). For every shot, explicitly decide which ' +
+  'Creative DNA elements you actually drew on for that ' +
   'shot\'s camera, lighting, composition, color, rhythm, or creative-direction choices, and list them in that ' +
   'shot\'s "appliedCreativeDNA". Do NOT copy every Creative DNA element onto every shot — that defeats the ' +
   'purpose. Camera and composition elements should be selected per shot based on what genuinely fits that ' +
@@ -292,7 +311,7 @@ Deno.serve(async (req) => {
       ? `\n\n${CREATIVE_DNA_INSTRUCTIONS}\n\nCreative DNA profile:\n${JSON.stringify(creativeDna)}`
       : '';
 
-    const userPrompt = `${OUTPUT_CONTRACT}\n\n` +
+    const userPrompt = `${OUTPUT_CONTRACT}\n\n${PRODUCT_CONTEXT_INSTRUCTIONS}\n\n` +
       `Product / concept (do not change): ${project.overall_prompt}\n\n` +
       `Persistent project entities (visual definitions live elsewhere and must not be altered unless the ` +
       `direction explicitly requires it):\n${summarizeVisualBible(visualBible)}\n\n` +

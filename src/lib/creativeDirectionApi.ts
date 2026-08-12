@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import type { CreativeBrief, CreativeConcept, CreativeDna, CreativeTreatment, SceneCountMode } from '../types';
+import type { BrandAnalysis, CreativeBrief, CreativeConcept, CreativeDna, CreativeTreatment, SceneCountMode } from '../types';
 
 export interface SceneCountParams {
   sceneCountMode: SceneCountMode;
@@ -56,12 +56,24 @@ export async function reviseCreativeDirection(input: {
   return json.treatment as CreativeTreatment;
 }
 
-/** "Inspire Me": proposes 3 distinct creative concepts for a product with no idea yet. */
+/** Brand Intelligence: understands the brand/product/category before any idea is generated. */
+export async function analyzeBrand(input: {
+  product: string;
+  mood?: string;
+  platform?: string;
+  targetAudience?: string;
+}): Promise<BrandAnalysis> {
+  const json = await postJson('brand-intelligence', input);
+  return json.analysis as BrandAnalysis;
+}
+
+/** "Inspire Me": proposes 3 distinct creative concepts for a product, grounded in a prior Brand Intelligence analysis when given. */
 export async function suggestConcepts(input: {
   product: string;
   mood?: string;
   platform?: string;
   targetAudience?: string;
+  brandContext?: BrandAnalysis;
 }): Promise<CreativeConcept[]> {
   const json = await postJson('creative-concepts', input);
   return json.concepts as CreativeConcept[];

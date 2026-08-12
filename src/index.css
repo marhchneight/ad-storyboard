@@ -1089,6 +1089,14 @@ a.btn-primary {
   font-size: 0.85rem;
 }
 
+.concept-card-reason {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #F0F0F0;
+  font-size: 0.75rem;
+  color: #777777;
+}
+
 .recent-projects-section {
   margin-top: 40px;
 }

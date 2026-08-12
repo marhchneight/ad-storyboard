@@ -26,12 +26,33 @@ const OUTPUT_CONTRACT =
 
 const CREATIVE_DNA_PRESERVATION_NOTE =
   'Creative DNA context: this shot currently has these Creative DNA elements applied (from an earlier ' +
-  'reference-based direction), with the application note shown after it. By default, KEEP "appliedCreativeDNA" ' +
+  'reference-based direction, already stripped of the reference\'s literal subject matter — treat everything ' +
+  'in it as pure directing technique, never as objects to place in the shot), with the application note shown ' +
+  'after it. By default, KEEP "appliedCreativeDNA" ' +
   'and "creativeDNAApplicationNote" exactly as given below in your response — a single-shot edit should not ' +
   'silently lose established Creative DNA context. Only change them if this edit instruction genuinely ' +
   'conflicts with a specific applied element (e.g. the instruction changes the camera angle/framing but an ' +
   'applied element specifically describes the old angle/framing) — in that case remove or adjust just the ' +
-  'conflicting element(s) and update the note to match the new shot; leave any non-conflicting elements alone.';
+  'conflicting element(s) and update the note to match the new shot; leave any non-conflicting elements alone. ' +
+  'Regardless of how you resolve the DNA elements, never let this edit introduce a new object into the shot ' +
+  '(food, ingredient, prop, person, product, or brand) that lacks a plausible reason to exist given the ' +
+  'advertised product — see the product-context priority rule below.';
+
+const PRODUCT_CONTEXT_INSTRUCTIONS =
+  'Product-context priority: before writing this shot\'s "visual", "action", "props", or "imagePrompt", first ' +
+  'infer this ad\'s product context from "Product / concept" below — what is actually being advertised, its ' +
+  'category, and what foods/objects/props would plausibly and naturally appear given that product, Korean ' +
+  'consumer context, and this shot\'s narrative purpose. Apply this priority order, highest first, when ' +
+  'deciding what appears in the shot: (1) an explicit instruction from the client — always honor it even if it ' +
+  'produces an unusual combination (e.g. an explicit request to mix the product with an unrelated ingredient is ' +
+  'valid content, not a mistake); (2) this product/brand context; (3) the scene\'s narrative and objects it ' +
+  'strictly requires; (4) established character/product continuity; (5) Creative DNA (if this shot has any, see ' +
+  'below) — Creative DNA controls HOW the shot is visualized (camera, lighting, composition, color, cut ' +
+  'rhythm), never WHAT product-relevant objects exist in it; (6) secondary decorative props, only when they do ' +
+  'not conflict with (1)-(4). Before finalizing, silently check: does every prominent object you are about to ' +
+  'describe have a plausible reason to exist given the advertised product and this shot\'s purpose? Never add ' +
+  'an object merely to make the shot visually richer, and never carry an object into the shot only because a ' +
+  'Creative DNA reference happened to be shot with it.';
 
 const LANGUAGE_POLICY =
   'Language policy: every field you return except "imagePrompt" must be written in natural Korean, concise ' +
@@ -228,7 +249,7 @@ Deno.serve(async (req) => {
         `Current application note: ${JSON.stringify(cut.creative_dna_application_note ?? '')}`
       : '';
 
-    const userPrompt = `${OUTPUT_CONTRACT}\n\n` +
+    const userPrompt = `${OUTPUT_CONTRACT}\n\n${PRODUCT_CONTEXT_INSTRUCTIONS}\n\n` +
       `Product / concept (do not change): ${project.overall_prompt}\n\n` +
       `Persistent project entities (visual definitions live elsewhere and must not be altered by this edit):\n` +
       `${summarizeVisualBible(visualBible)}\n\n` +

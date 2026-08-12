@@ -6,6 +6,17 @@ const SYSTEM_ROLE =
   'reusable stylistic choices a director could apply to an unrelated shoot. Do not describe the literal ' +
   'subject matter of the reference; describe the craft behind it.';
 
+const STYLE_CONTENT_SEPARATION_NOTE =
+  'Critical rule — separate STYLE from CONTENT: this reference was shot for an unrelated subject, and ' +
+  'whatever you extract will be reused on a completely different product/story. Extract only transferable ' +
+  'visual/directing attributes — camera angle, shot size, framing, composition, lighting, color treatment, ' +
+  'depth of field, camera movement, editing rhythm, visual energy, general styling principles. Never mention ' +
+  'the reference\'s literal content — specific foods, ingredients, people, products, brands, logos, packaging, ' +
+  'clothing, props, or background objects — anywhere in your output, even as an example. Imitate HOW the ' +
+  'reference is shot, never WHAT happens to be inside it. For instance, a top-down shot of pasta ingredients ' +
+  'should yield notes like "top-down composition" and "evenly distributed arrangement of foreground elements" ' +
+  '— never "pasta", "noodles", or any other literal ingredient name.';
+
 const KOREAN_STYLE_NOTE =
   'Every Korean field must read naturally to a Korean advertising/film-production professional — never a ' +
   'literal, word-for-word translation. Keep common film-industry loanwords the way the Korean industry ' +
@@ -25,7 +36,8 @@ const OUTPUT_CONTRACT =
   'integer score reflecting how strongly the reference expresses that quality, based on your actual visual ' +
   'analysis — not decorative random numbers. The DNA arrays are each 2-5 short, concrete, reusable directing ' +
   'notes (camera/lens/angle choices, lighting qualities, composition habits, pacing and cut rhythm, color and ' +
-  'mood, and underlying creative principles). Every "...Ko" field (and "labelKo") is the Korean equivalent of ' +
+  'mood, and underlying creative principles) — see the style/content separation rule below for what belongs ' +
+  'in these arrays. Every "...Ko" field (and "labelKo") is the Korean equivalent of ' +
   'its English counterpart, in the exact same order and same length as that counterpart — labelKo matches ' +
   'label, cameraDnaKo[i] matches cameraDna[i], and so on. ' + KOREAN_STYLE_NOTE + ' Never wrap the JSON in ' +
   'markdown code fences.';
@@ -238,7 +250,7 @@ Deno.serve(async (req) => {
 
     let content: string;
     try {
-      content = await callOpenAiContent(SYSTEM_ROLE, userContent);
+      content = await callOpenAiContent(`${SYSTEM_ROLE} ${STYLE_CONTENT_SEPARATION_NOTE}`, userContent);
     } catch (err) {
       return jsonResponse({ error: String(err) }, 502);
     }

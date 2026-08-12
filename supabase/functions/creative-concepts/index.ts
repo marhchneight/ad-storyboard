@@ -10,13 +10,30 @@ const LANGUAGE_POLICY =
   'professional commercial pitch to a Korean team. Do not translate literally from English. Industry-standard ' +
   'loanwords (e.g. 미니멀, 프리미엄) may be used naturally where appropriate.';
 
+const GROUNDING_POLICY =
+  'Grounding rule: you are given a brand analysis below. Each concept\'s core structure must be built from at ' +
+  'least one concrete element of that analysis — a real purchase situation, usage context, distribution/channel ' +
+  'behavior, distinctive product/packaging asset, or a listed creative opportunity. Reject any concept that ' +
+  'could be pitched unchanged to an unrelated brand in a different category — that is a sign it is generic, not ' +
+  'a real answer to this brief. BAD example: "일상의 영웅들" (works for a coffee brand, a phone brand, an ' +
+  'insurance company — anything, which means it isn\'t really about this brand). GOOD: an idea whose visual ' +
+  'premise is impossible to picture without this brand\'s specific product/packaging/purchase behavior. Prefer ' +
+  'the brand\'s "creativeOpportunities" as your starting point for each concept, but you don\'t need to use all ' +
+  'of them. If "trendContext.recentDataAvailable" is false, do not imply the concept reflects the brand\'s ' +
+  '"current" campaign or messaging — ground it in the stable brand/category facts instead. Priority when ' +
+  'anything conflicts: explicit user input (mood/platform/target audience given below) > verified brand facts > ' +
+  'category/trend context > your own inference.';
+
 const OUTPUT_CONTRACT =
   'Respond with a single JSON object matching this exact shape, and nothing else: ' +
-  '{"concepts": [{"title": string, "concept": string}, {"title": string, "concept": string}, ' +
-  '{"title": string, "concept": string}]}. Always return exactly 3 concepts. "title" is a short, natural ' +
-  'Korean working title (한국어, 4~14자 내외) — not English, not all caps. "concept" is 2-4 Korean sentences ' +
-  'pitching the creative idea vividly — concrete enough to picture, not a generic tagline. Never wrap the ' +
-  'JSON in markdown code fences.';
+  '{"concepts": [{"title": string, "concept": string, "reason": string}, ' +
+  '{"title": string, "concept": string, "reason": string}, ' +
+  '{"title": string, "concept": string, "reason": string}]}. Always return exactly 3 concepts. "title" is a ' +
+  'short, natural Korean working title (한국어, 4~14자 내외) — not English, not all caps. "concept" is 2-4 ' +
+  'Korean sentences pitching the creative idea vividly — concrete enough to picture, not a generic tagline. ' +
+  '"reason" is one short Korean sentence (under 60자) answering "왜 이 브랜드에 맞나요?" — it must name the ' +
+  'specific brand/product/purchase/consumption/channel fact the concept is built on, not a vague compliment. ' +
+  'Never wrap the JSON in markdown code fences.';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -34,6 +51,7 @@ function jsonResponse(body: unknown, status: number) {
 interface Concept {
   title: string;
   concept: string;
+  reason?: string;
 }
 
 function isValidConcepts(value: unknown): value is { concepts: Concept[] } {
@@ -45,6 +63,12 @@ function isValidConcepts(value: unknown): value is { concepts: Concept[] } {
     const item = c as Record<string, unknown>;
     return typeof item.title === 'string' && typeof item.concept === 'string';
   });
+}
+
+// Keep this loosely typed on purpose — it only ever flows through to a JSON.stringify
+// in the prompt, and the shape is owned by brand-intelligence's output contract.
+function summarizeBrandContext(brandContext: Record<string, unknown>): string {
+  return JSON.stringify(brandContext);
 }
 
 Deno.serve(async (req) => {
@@ -64,7 +88,7 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user) return jsonResponse({ error: 'unauthorized' }, 401);
 
-    const { product, mood, platform, targetAudience } = await req.json();
+    const { product, mood, platform, targetAudience, brandContext } = await req.json();
     if (!product || typeof product !== 'string' || !product.trim()) {
       return jsonResponse({ error: 'product required' }, 400);
     }
@@ -74,7 +98,12 @@ Deno.serve(async (req) => {
     if (typeof platform === 'string' && platform.trim()) lines.push(`Platform: ${platform.trim()}`);
     if (typeof targetAudience === 'string' && targetAudience.trim()) lines.push(`Target audience: ${targetAudience.trim()}`);
 
-    const userPrompt = `${OUTPUT_CONTRACT}\n\n${lines.join('\n')}\n\n이 제품을 위한 광고 컨셉 3개를 제안하세요.`;
+    const hasBrandContext = brandContext && typeof brandContext === 'object';
+    const groundingBlock = hasBrandContext
+      ? `\n\n${GROUNDING_POLICY}\n\nBrand analysis:\n${summarizeBrandContext(brandContext)}`
+      : '';
+
+    const userPrompt = `${OUTPUT_CONTRACT}\n\n${lines.join('\n')}${groundingBlock}\n\n이 제품을 위한 광고 컨셉 3개를 제안하세요.`;
 
     const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
