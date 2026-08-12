@@ -9,6 +9,8 @@ interface DitheringSwirlBackgroundProps {
   className?: string;
 }
 
+type Rgb = [number, number, number];
+
 // 4x4 ordered (Bayer) dither matrix, normalized to 0..1.
 const BAYER_4X4 = [
   [0, 8, 2, 10],
@@ -17,11 +19,17 @@ const BAYER_4X4 = [
   [15, 7, 13, 5],
 ].map((row) => row.map((v) => v / 16));
 
-function hexToRgb(hex: string): [number, number, number] {
+const COLOR_TRANSITION_MS = 280;
+
+function hexToRgb(hex: string): Rgb {
   const clean = hex.replace('#', '');
   const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean;
   const num = parseInt(full, 16);
   return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+function lerpRgb(a: Rgb, b: Rgb, t: number): Rgb {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }
 
 function smoothstep(edge0: number, edge1: number, x: number) {
@@ -40,6 +48,44 @@ function DitheringSwirlBackgroundImpl({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // Latest requested palette + an in-flight lerp toward it, read by the draw
+  // loop each frame. Updating these never touches animation start time or
+  // recreates the canvas — only the initialization effect (mount-only) does.
+  const colorStateRef = useRef({
+    fromBack: hexToRgb(colorBack),
+    fromFront: hexToRgb(colorFront),
+    toBack: hexToRgb(colorBack),
+    toFront: hexToRgb(colorFront),
+    transitionStart: 0,
+  });
+  // Set by the animation-loop effect so this effect can force one repaint —
+  // needed under prefers-reduced-motion, where no rAF loop is running to
+  // otherwise pick up the new palette.
+  const requestDrawRef = useRef<(() => void) | null>(null);
+
+  // Color-only update: reruns whenever the theme (or any palette prop)
+  // changes, but does NOT touch the canvas/rAF/observer effect below.
+  useEffect(() => {
+    const state = colorStateRef.current;
+    const currentBack = lerpElapsed(state, 'back');
+    const currentFront = lerpElapsed(state, 'front');
+    state.fromBack = currentBack;
+    state.fromFront = currentFront;
+    state.toBack = hexToRgb(colorBack);
+    state.toFront = hexToRgb(colorFront);
+    state.transitionStart = performance.now();
+    requestDrawRef.current?.();
+  }, [colorBack, colorFront]);
+
+  function lerpElapsed(state: typeof colorStateRef.current, which: 'back' | 'front'): Rgb {
+    const now = performance.now();
+    const t = Math.min(1, (now - state.transitionStart) / COLOR_TRANSITION_MS);
+    return which === 'back' ? lerpRgb(state.fromBack, state.toBack, t) : lerpRgb(state.fromFront, state.toFront, t);
+  }
+
+  // One-time setup: canvas, offscreen buffer, animation loop, resize
+  // observer. Intentionally excludes colorBack/colorFront so theme changes
+  // never recreate the canvas or reset the animation clock.
   useEffect(() => {
     const container = containerRef.current;
     const canvas = canvasRef.current;
@@ -56,9 +102,6 @@ function DitheringSwirlBackgroundImpl({
     const isMobile = window.matchMedia('(max-width: 640px)').matches;
     const effectiveSpeed = isMobile ? speed * 0.7 : speed;
     const effectivePxSize = isMobile ? pxSize + 1 : pxSize;
-
-    const back = hexToRgb(colorBack);
-    const front = hexToRgb(colorFront);
 
     let cols = 0;
     let rows = 0;
@@ -86,6 +129,11 @@ function DitheringSwirlBackgroundImpl({
       const t = ((time - startTime) / 1000) * effectiveSpeed;
       const data = imageData.data;
       const aspect = cols / rows;
+
+      const state = colorStateRef.current;
+      const colorT = Math.min(1, (time - state.transitionStart) / COLOR_TRANSITION_MS);
+      const back = lerpRgb(state.fromBack, state.toBack, colorT);
+      const front = lerpRgb(state.fromFront, state.toFront, colorT);
 
       for (let cy = 0; cy < rows; cy++) {
         for (let cx = 0; cx < cols; cx++) {
@@ -121,6 +169,14 @@ function DitheringSwirlBackgroundImpl({
     resize();
     draw(startTime);
 
+    const recolor = (time: number) => {
+      draw(time);
+      const state = colorStateRef.current;
+      if (time - state.transitionStart < COLOR_TRANSITION_MS) {
+        rafId = requestAnimationFrame(recolor);
+      }
+    };
+
     if (!reducedMotion) {
       const loop = (time: number) => {
         rafId = requestAnimationFrame(loop);
@@ -130,6 +186,14 @@ function DitheringSwirlBackgroundImpl({
         draw(time);
       };
       rafId = requestAnimationFrame(loop);
+      requestDrawRef.current = () => draw(performance.now());
+    } else {
+      // Reduced motion: no continuous loop, but still let an in-flight
+      // color transition (theme switch) play out as a few static redraws.
+      requestDrawRef.current = () => {
+        cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(recolor);
+      };
     }
 
     const observer = new ResizeObserver(() => {
@@ -141,8 +205,9 @@ function DitheringSwirlBackgroundImpl({
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
       observer.disconnect();
+      requestDrawRef.current = null;
     };
-  }, [colorBack, colorFront, speed, pxSize, opacity]);
+  }, [speed, pxSize]);
 
   return (
     <div

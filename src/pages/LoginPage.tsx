@@ -5,11 +5,11 @@ import { useTheme } from '../hooks/useTheme';
 import ThemeToggle from '../components/ThemeToggle';
 import DitheringSwirlBackground from '../components/DitheringSwirlBackground';
 
-// Mirrors the --bg / --ink token values in index.css for each theme, so the
-// swirl reads as the same studio's day/night palette rather than a separate look.
+// Background mirrors the --bg token per theme; the dither/swirl uses a muted
+// brand mint (not full mono) so light/dark read as the same studio's identity.
 const SWIRL_PALETTE = {
-  light: { back: '#FAFAF8', front: '#111111', opacity: 0.16 },
-  dark: { back: '#0B0B0B', front: '#F2F2F2', opacity: 0.2 },
+  light: { back: '#FAFAF8', front: '#71D6C3', opacity: 0.16 },
+  dark: { back: '#0B0B0B', front: '#82E0CD', opacity: 0.2 },
 };
 
 export default function LoginPage() {
