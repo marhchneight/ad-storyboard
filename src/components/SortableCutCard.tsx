@@ -10,9 +10,15 @@ interface Props {
   onGenerate: () => Promise<void>;
   onRemove: () => Promise<void>;
   onAiEdited: () => Promise<void>;
+  /** True while a "전체 이미지 생성" batch is running — disables drag reordering so the queue can't shift mid-run. */
+  dragDisabled?: boolean;
+  /** True while a "전체 이미지 생성" batch is running — disables the individual generate/retry button. */
+  generateDisabled?: boolean;
 }
 
-export default function SortableCutCard({ cut, index, onUpdate, onGenerate, onRemove, onAiEdited }: Props) {
+export default function SortableCutCard({
+  cut, index, onUpdate, onGenerate, onRemove, onAiEdited, dragDisabled, generateDisabled,
+}: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cut.id });
 
   const style = {
@@ -25,10 +31,10 @@ export default function SortableCutCard({ cut, index, onUpdate, onGenerate, onRe
     <tr ref={setNodeRef} style={style} className="sortable-cut-card"
       data-cut-id={cut.id} data-cut-dna-applied={cut.applied_creative_dna.length > 0 ? 'true' : undefined}>
       <td className="drag-handle-cell">
-        <span className="drag-handle" {...attributes} {...listeners}>⠿</span>
+        <span className="drag-handle" {...(dragDisabled ? {} : attributes)} {...(dragDisabled ? {} : listeners)}>⠿</span>
       </td>
       <CutCard cut={cut} index={index} onUpdate={onUpdate} onGenerate={onGenerate} onRemove={onRemove}
-        onAiEdited={onAiEdited} />
+        onAiEdited={onAiEdited} generateDisabled={generateDisabled} />
     </tr>
   );
 }

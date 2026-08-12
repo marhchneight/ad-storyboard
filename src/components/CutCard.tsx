@@ -11,9 +11,11 @@ interface Props {
   onGenerate: () => Promise<void>;
   onRemove: () => Promise<void>;
   onAiEdited: () => Promise<void>;
+  /** True while a "전체 이미지 생성" batch is running. */
+  generateDisabled?: boolean;
 }
 
-export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, onAiEdited }: Props) {
+export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, onAiEdited, generateDisabled }: Props) {
   const [sceneDescription, setSceneDescription] = useState(cut.scene_description);
   const [dialogue, setDialogue] = useState(cut.dialogue);
   const [cameraDirection, setCameraDirection] = useState(cut.camera_direction);
@@ -98,10 +100,10 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
           <p className="error">생성 실패</p>
         )}
         {cut.generation_status !== 'generating' && cut.generation_status !== 'failed' && (
-          <button className="btn-secondary btn-small" onClick={handleGenerate}>{cut.image_url ? '다시 생성' : '이미지 생성'}</button>
+          <button className="btn-secondary btn-small" onClick={handleGenerate} disabled={generateDisabled}>{cut.image_url ? '다시 생성' : '이미지 생성'}</button>
         )}
         {cut.generation_status === 'failed' && (
-          <button className="btn-secondary btn-small" onClick={handleGenerate}>다시 시도</button>
+          <button className="btn-secondary btn-small" onClick={handleGenerate} disabled={generateDisabled}>다시 시도</button>
         )}
         {showLightbox && cut.image_url && createPortal(
           <div className="image-lightbox-overlay" onClick={() => setShowLightbox(false)}>

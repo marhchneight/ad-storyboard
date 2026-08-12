@@ -37,6 +37,9 @@ export default function EditorPage() {
   const [lastChanges, setLastChanges] = useState<string[] | null>(null);
   const [history, setHistory] = useState<Cut[][]>([]);
   const [rouletteConstraint, setRouletteConstraint] = useState<string | null>(null);
+  const [batchGenerating, setBatchGenerating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ cutNumber: number; completed: number; total: number } | null>(null);
+  const [batchSummary, setBatchSummary] = useState<string | null>(null);
   const { cuts, updateCut, generateImage, addCut, removeCut, reorderCuts, refresh, restoreSnapshot } = useCuts(id!);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -57,6 +60,7 @@ export default function EditorPage() {
   }
 
   async function handleDragEnd(event: DragEndEvent) {
+    if (batchGenerating) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = cuts.findIndex((c) => c.id === active.id);
@@ -232,7 +236,51 @@ export default function EditorPage() {
     }
   }
 
+  // Batch generation is a thin sequential orchestration over the same
+  // generateImage(cutId) the individual "이미지 생성" button already calls —
+  // no separate/simplified generation path. Sequential (not concurrent)
+  // because generate-image locks each entity's reference image to the first
+  // shot that generates it (see withLockedReferenceImages), so later shots
+  // depend on earlier ones having already finished.
+  async function handleGenerateAll() {
+    if (batchGenerating) return;
+    const targets = cuts
+      .map((cut, i) => ({ cut, cutNumber: i + 1 }))
+      .filter(({ cut }) => !cut.image_url && cut.generation_status !== 'generating');
+    if (targets.length === 0) {
+      setBatchSummary('모든 컷의 이미지가 이미 생성되어 있습니다.');
+      return;
+    }
+    setError(null);
+    setBatchSummary(null);
+    setBatchGenerating(true);
+    let succeeded = 0;
+    const failedNumbers: number[] = [];
+    for (let i = 0; i < targets.length; i++) {
+      const { cut, cutNumber } = targets[i];
+      setBatchProgress({ cutNumber, completed: i, total: targets.length });
+      try {
+        await generateImage(cut.id);
+        succeeded++;
+      } catch {
+        failedNumbers.push(cutNumber);
+      }
+    }
+    setBatchProgress(null);
+    setBatchGenerating(false);
+    const parts = [`${succeeded}개의 이미지를 생성했습니다.`];
+    if (failedNumbers.length > 0) {
+      parts.push(`${failedNumbers.join(', ')}번 컷 생성에 실패했습니다. 다시 시도해주세요.`);
+    }
+    setBatchSummary(parts.join(' '));
+  }
+
   if (!project) return <div className="page-shell">로딩 중...</div>;
+
+  const pendingImageCount = cuts.filter((c) => !c.image_url && c.generation_status !== 'generating').length;
+  const generateAllLabel = batchGenerating && batchProgress
+    ? `${batchProgress.cutNumber}번 컷 생성 중... ${batchProgress.completed}/${batchProgress.total} 완료`
+    : pendingImageCount > 0 ? `전체 이미지 생성 (${pendingImageCount})` : '전체 이미지 생성';
 
   const dnaAppliedCount = cuts.filter((c) => c.applied_creative_dna.length > 0).length;
   const firstDnaAppliedCutId = cuts.find((c) => c.applied_creative_dna.length > 0)?.id ?? null;
@@ -253,6 +301,10 @@ export default function EditorPage() {
         <div className="page-header-actions">
           <button type="button" className="btn-secondary" onClick={handleUndo} disabled={history.length === 0 || directing}>
             Undo
+          </button>
+          <button type="button" className="btn-secondary" onClick={handleGenerateAll}
+            disabled={batchGenerating || pendingImageCount === 0}>
+            {generateAllLabel}
           </button>
           <button type="button" className="btn-secondary" onClick={handleDownloadAllImages} disabled={zipping}>
             {zipping
@@ -331,6 +383,8 @@ export default function EditorPage() {
                     onGenerate={() => generateImage(cut.id)}
                     onRemove={() => removeCut(cut.id)}
                     onAiEdited={refresh}
+                    dragDisabled={batchGenerating}
+                    generateDisabled={batchGenerating}
                   />
                 ))}
               </tbody>
@@ -338,6 +392,7 @@ export default function EditorPage() {
           </div>
         </SortableContext>
       </DndContext>
+      {batchSummary && <p className="field-hint">{batchSummary}</p>}
       {error && <p className="error">{error}</p>}
       <button type="button" className="btn-secondary" onClick={handleAddCut}>+ 컷 추가</button>
     </div>
