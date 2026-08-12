@@ -142,6 +142,13 @@ export interface Project {
   updated_at: string;
 }
 
+/** Persistent character/product/location entity ids this cut references (see Project.visual_bible). */
+export interface CutEntityRefs {
+  characters: string[];
+  products: string[];
+  location: string | null;
+}
+
 export interface Cut {
   id: string;
   project_id: string;
@@ -165,6 +172,12 @@ export interface Cut {
   sfx: string;
   transition: string;
   purpose: string;
+  // English-only prompt actually sent to image generation — see ai-director's
+  // language policy. Defaults to '' at the DB level for rows saved before
+  // this field existed.
+  image_prompt: string;
+  // Which persistent visual-bible entities (if any) this cut references.
+  entity_refs: CutEntityRefs;
   // Which Creative DNA elements (if any) genuinely influenced this scene, and
   // a short Korean note on how. Defaults to []/'' at the DB level, so these
   // are always present (never undefined) even on rows saved before this

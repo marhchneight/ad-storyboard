@@ -98,6 +98,10 @@ export function useCuts(projectId: string) {
         sfx: cut.sfx,
         transition: cut.transition,
         purpose: cut.purpose,
+        image_prompt: cut.image_prompt,
+        entity_refs: cut.entity_refs,
+        applied_creative_dna: cut.applied_creative_dna,
+        creative_dna_application_note: cut.creative_dna_application_note,
       };
       if (currentIds.has(cut.id)) {
         await supabase.from('cuts').update(fields).eq('id', cut.id);
