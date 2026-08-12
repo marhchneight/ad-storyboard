@@ -127,6 +127,41 @@ export interface AppliedCreativeDnaTag {
   labelKo: string;
 }
 
+/** How boldly Director's Room / storyboard generation should express the chosen idea. */
+export type CreativeRisk = 'safe' | 'balanced' | 'creative' | 'bold';
+
+export type CreativeDnaUsageLevel = 'active' | 'partial' | 'reinterpreted';
+
+/** Qualitative (never a fabricated percentage) read on how much a directing option draws on Creative DNA. */
+export interface DirectingReferenceDnaUsage {
+  level: CreativeDnaUsageLevel;
+  summaryKo: string;
+}
+
+/** One Director's Room directing approach — a specific way to shoot/pace/frame the already-decided idea. */
+export interface DirectingOption {
+  id: string;
+  titleKo: string;
+  summaryKo: string;
+  visualApproach: string;
+  cameraApproach: string;
+  editRhythm: string;
+  mood: string;
+  keyTechniques: string[];
+  creativeRiskLevel: CreativeRisk;
+  /** Present only when a Creative DNA reference was available for this project. */
+  referenceDnaUsage: DirectingReferenceDnaUsage | null;
+  /** Present only when Brand Intelligence context was available for this project. */
+  brandFitReason: string | null;
+}
+
+/** The advertising role one cut plays in the overall flow (attention/product/benefit/cta/...). Not a fixed enum — AI names the type it needs. */
+export interface SceneRole {
+  type: string;
+  labelKo: string;
+  reasonKo: string;
+}
+
 export interface Project {
   id: string;
   user_id: string;
@@ -138,6 +173,9 @@ export interface Project {
   creative_direction: string;
   creative_dna: CreativeDna | null;
   creative_treatment: CreativeTreatment | null;
+  /** The Director's Room direction the user picked, if they went through it — null when skipped or on older projects. */
+  selected_directing_direction: DirectingOption | null;
+  creative_risk: CreativeRisk | null;
   created_at: string;
   updated_at: string;
 }
@@ -184,6 +222,10 @@ export interface Cut {
   // field existed — no DNA was ever "applied" to those, which is correct.
   applied_creative_dna: AppliedCreativeDnaTag[];
   creative_dna_application_note: string;
+  // What advertising role this cut plays (attention/product/benefit/cta/...).
+  // Nullable — absent on rows created before this existed, or via the
+  // legacy manual-cut-count flow, which never assigns one.
+  scene_role: SceneRole | null;
   created_at: string;
   updated_at: string;
 }

@@ -15,7 +15,8 @@ const OUTPUT_CONTRACT =
   '"purpose": string, "imagePrompt": string, "characterIds": string[], "productIds": string[], ' +
   '"locationId": (string or null), "appliedCreativeDNA": [{"category": "camera"|"lighting"|"composition"|' +
   '"editRhythm"|"colorMood"|"creativePrinciple", "key": string, "labelKo": string}], ' +
-  '"creativeDNAApplicationNote": string}]}. Each shot\'s "location" field is a short KOREAN phrase naming where ' +
+  '"creativeDNAApplicationNote": string, ' +
+  '"sceneRole": {"type": string, "labelKo": string, "reasonKo": string}}]}. Each shot\'s "location" field is a short KOREAN phrase naming where ' +
   'this shot takes place for a human reading the shot list (e.g. "모던한 아파트 거실") — do not confuse it ' +
   'with the persistent location entity (referenced only via "locationId"), which stays in English elsewhere. ' +
   '"changesSummary" is 2-5 short Korean bullet strings describing what ' +
@@ -25,9 +26,19 @@ const OUTPUT_CONTRACT =
   'below and must stay exactly the same as each shot\'s current ids unless the direction explicitly changes ' +
   'which entity appears in that shot (e.g. a costume change, a new location) — never invent a new entity id. ' +
   '"appliedCreativeDNA" and "creativeDNAApplicationNote" only apply when a Creative DNA profile is given below ' +
-  '(see the Creative DNA section) — otherwise always return an empty array and empty string for them. ' +
+  '(see the Creative DNA section) — otherwise always return an empty array and empty string for them. See the ' +
+  'scene role instructions below for "sceneRole". ' +
   'Keep "shots" in narrative order starting at shotNumber 1. You may add, remove, or reorder shots if the ' +
   'instruction calls for it. Never wrap the JSON in markdown code fences.';
+
+const SCENE_ROLE_INSTRUCTIONS =
+  'Scene role: every scene must have a clear advertising purpose. When you touch a shot, keep its "sceneRole" ' +
+  'consistent with the shot\'s (possibly revised) content unless the direction genuinely changes what job this ' +
+  'shot does in the ad, in which case update it. Do not create filler scenes simply to reach a scene count, and ' +
+  'do not force a fixed role sequence onto every ad regardless of its actual idea and duration. "sceneRole.type" ' +
+  'is a short camelCase English slug (e.g. "attention", "productHero", "benefit"); "sceneRole.labelKo" is a ' +
+  'short natural Korean label (e.g. "시선 확보", "제품 등장"); "sceneRole.reasonKo" is one short Korean sentence ' +
+  'explaining why this specific shot plays that role.';
 
 const PRODUCT_CONTEXT_INSTRUCTIONS =
   'Product-context priority: before writing or revising any shot\'s "visual", "action", "props", or ' +
@@ -193,6 +204,40 @@ function ensureImagePromptReflectsDna(imagePrompt: string, tags: AppliedCreative
   return base ? `${base}, ${missingPhrases.join(', ')}` : missingPhrases.join(', ');
 }
 
+interface SceneRole {
+  type: string;
+  labelKo: string;
+  reasonKo: string;
+}
+
+// Drops a malformed/missing sceneRole rather than failing the whole shot.
+function sanitizeSceneRole(value: unknown): SceneRole | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.type !== 'string' || !v.type.trim()) return null;
+  if (typeof v.labelKo !== 'string' || !v.labelKo.trim()) return null;
+  if (typeof v.reasonKo !== 'string' || !v.reasonKo.trim()) return null;
+  return { type: v.type, labelKo: v.labelKo, reasonKo: v.reasonKo };
+}
+
+// If the user picked a Director's Room direction for this project, whole-board
+// edits/regenerations should stay consistent with it rather than drifting
+// toward a generic reinterpretation each time.
+function buildDirectingContextBlock(project: Record<string, unknown>): string {
+  const direction = project.selected_directing_direction as Record<string, unknown> | null;
+  if (!direction || typeof direction !== 'object') return '';
+  const parts = [
+    typeof direction.titleKo === 'string' ? `Directing approach: ${direction.titleKo}` : null,
+    typeof direction.visualApproach === 'string' ? `Visual approach: ${direction.visualApproach}` : null,
+    typeof direction.cameraApproach === 'string' ? `Camera approach: ${direction.cameraApproach}` : null,
+    typeof direction.editRhythm === 'string' ? `Edit rhythm: ${direction.editRhythm}` : null,
+    typeof direction.mood === 'string' ? `Mood: ${direction.mood}` : null,
+  ].filter((p): p is string => !!p);
+  if (parts.length === 0) return '';
+  return `\n\nThis project has an established directing approach from Director's Room — keep the storyboard ` +
+    `consistent with it unless the direction to apply explicitly overrides it:\n${parts.join('\n')}`;
+}
+
 interface RevisedShot {
   shotNumber: number;
   duration: number;
@@ -217,6 +262,7 @@ interface RevisedShot {
   locationId?: string | null;
   appliedCreativeDNA?: unknown;
   creativeDNAApplicationNote?: string;
+  sceneRole?: unknown;
 }
 
 interface EditorOutput {
@@ -297,6 +343,7 @@ Deno.serve(async (req) => {
         characterIds: refs.characters ?? [],
         productIds: refs.products ?? [],
         locationId: refs.location ?? null,
+        sceneRole: c.scene_role ?? null,
       };
     });
 
@@ -311,12 +358,12 @@ Deno.serve(async (req) => {
       ? `\n\n${CREATIVE_DNA_INSTRUCTIONS}\n\nCreative DNA profile:\n${JSON.stringify(creativeDna)}`
       : '';
 
-    const userPrompt = `${OUTPUT_CONTRACT}\n\n${PRODUCT_CONTEXT_INSTRUCTIONS}\n\n` +
+    const userPrompt = `${OUTPUT_CONTRACT}\n\n${PRODUCT_CONTEXT_INSTRUCTIONS}\n\n${SCENE_ROLE_INSTRUCTIONS}\n\n` +
       `Product / concept (do not change): ${project.overall_prompt}\n\n` +
       `Persistent project entities (visual definitions live elsewhere and must not be altered unless the ` +
       `direction explicitly requires it):\n${summarizeVisualBible(visualBible)}\n\n` +
       `Current shot list:\n${JSON.stringify(shotsContext)}\n\n` +
-      `Direction to apply: ${directionInstruction}` + creativeDnaBlock;
+      `Direction to apply: ${directionInstruction}` + creativeDnaBlock + buildDirectingContextBlock(project);
 
     const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -397,6 +444,7 @@ Deno.serve(async (req) => {
         },
         applied_creative_dna: shotAppliedDna,
         creative_dna_application_note: shotDnaNote,
+        scene_role: sanitizeSceneRole(shot.sceneRole) ?? existingCuts[i].scene_role ?? null,
         image_url: null,
         generation_status: 'idle',
       }).eq('id', existingCuts[i].id);
@@ -433,6 +481,7 @@ Deno.serve(async (req) => {
         creative_dna_application_note: typeof shot.creativeDNAApplicationNote === 'string'
           ? shot.creativeDNAApplicationNote
           : '',
+        scene_role: sanitizeSceneRole(shot.sceneRole),
       }));
       await supabase.from('cuts').insert(extraRows);
     } else if (existingCuts.length > newShots.length) {

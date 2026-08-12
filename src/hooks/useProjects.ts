@@ -1,5 +1,8 @@
 import { supabase } from '../lib/supabaseClient';
-import type { AspectRatio, CreativeBrief, CreativeTreatment, Project, SceneCountMode, StoryboardStyle } from '../types';
+import type {
+  AspectRatio, CreativeBrief, CreativeRisk, CreativeTreatment, DirectingOption, Project, SceneCountMode,
+  StoryboardStyle,
+} from '../types';
 
 export async function createProject(input: {
   title: string;
@@ -55,6 +58,9 @@ export async function directStoryboard(input: {
   sceneCountMode?: SceneCountMode;
   requestedSceneCount?: number;
   targetDurationSeconds?: number;
+  /** The Director's Room option the user picked, if they went through it. */
+  directingDirection?: DirectingOption;
+  creativeRisk?: CreativeRisk;
 }): Promise<string> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
@@ -74,6 +80,8 @@ export async function directStoryboard(input: {
       sceneCountMode: input.sceneCountMode,
       requestedSceneCount: input.requestedSceneCount,
       targetDurationSeconds: input.targetDurationSeconds,
+      directingDirection: input.directingDirection,
+      creativeRisk: input.creativeRisk,
     }),
   });
 

@@ -621,6 +621,34 @@ a.btn-primary {
   100% { background-color: transparent; }
 }
 
+/* Per-scene advertising role — same compact/only-when-present pattern as
+   the Creative DNA indicator above. */
+
+.scene-role {
+  margin-bottom: 6px;
+}
+
+.scene-role summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.72rem;
+  color: #999999;
+}
+
+.scene-role summary::-webkit-details-marker {
+  display: none;
+}
+
+.scene-role-reason {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border: 1px solid #E8E8E8;
+  border-radius: 8px;
+  background-color: #FFFFFF;
+  font-size: 0.78rem;
+  color: #111111;
+}
+
 /* Individual shot AI edit */
 
 .shot-ai-edit {
@@ -1229,7 +1257,96 @@ a.btn-primary {
   padding-top: 16px;
 }
 
+/* Director's Room */
+
+.director-room {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.director-room-title {
+  margin: 12px 0 4px;
+}
+
+.director-room-subtitle {
+  color: #666666;
+  margin-bottom: 20px;
+}
+
+.director-room-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.director-card {
+  display: flex;
+  flex-direction: column;
+  background-color: #FFFFFF;
+  border: 1px solid #E8E8E8;
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.director-card h3 {
+  margin-bottom: 6px;
+}
+
+.director-card-summary {
+  font-size: 0.85rem;
+  margin-bottom: 10px;
+}
+
+.director-card-tags {
+  font-size: 0.78rem;
+  color: #666666;
+  margin-bottom: 6px;
+}
+
+.director-card-techniques {
+  font-size: 0.75rem;
+  color: #999999;
+  margin-bottom: 12px;
+}
+
+.director-card-secondary {
+  margin-bottom: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #F0EEE9;
+}
+
+.director-card-secondary-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #999999;
+  margin-bottom: 4px;
+}
+
+.director-card-secondary p {
+  font-size: 0.78rem;
+  color: #111111;
+  margin: 0;
+}
+
+.director-card .btn-primary {
+  margin-top: auto;
+}
+
+.director-room-skip {
+  display: block;
+  margin: 20px auto 0;
+}
+
 @media (max-width: 768px) {
+  .director-room-grid {
+    grid-template-columns: 1fr;
+  }
+
+
   .hero {
     padding: 32px 0 24px;
   }

@@ -34,6 +34,19 @@ const LANGUAGE_POLICY =
   '"visualBible" (characters, products, locations) — these are internal model-facing definitions, never shown ' +
   'to the end user. English and Korean fields must never influence each other\'s language.';
 
+const SCENE_ROLE_INSTRUCTIONS =
+  'Every scene must have a clear advertising purpose — assign each shot a "sceneRole" describing what job it ' +
+  'does in the overall ad (e.g. grabbing attention, establishing the product, stating the problem, showing a ' +
+  'benefit, proving a claim, showing usage, building desire, an emotional beat, a transition, brand recall, or ' +
+  'a call to action — invent the right role for this specific ad rather than forcing a fixed list). Do not ' +
+  'create filler scenes simply to reach a requested scene count — every scene needs a real "why does this shot ' +
+  'need to exist" answer. Do not force the same fixed role sequence onto every ad regardless of its actual idea, ' +
+  'product, and duration — compose the role sequence to fit this specific ad. "sceneRole.type" is a short ' +
+  'camelCase English slug you invent (e.g. "attention", "productHero", "benefit"); "sceneRole.labelKo" is a ' +
+  'short natural Korean label for a Korean production team (e.g. "시선 확보", "제품 등장", "효능 강조"); ' +
+  '"sceneRole.reasonKo" is one short Korean sentence explaining why this specific shot plays that role in this ' +
+  'specific ad (not a generic definition of the role).';
+
 const DIRECTOR_OUTPUT_CONTRACT =
   'Always respond with a single JSON object matching this exact shape, and nothing else: ' +
   '{"concept": string, "creativeDirection": string, ' +
@@ -50,7 +63,8 @@ const DIRECTOR_OUTPUT_CONTRACT =
   '"shotSize": string, "lens": string, "angle": string, "movement": string, "composition": string, ' +
   '"visual": string, "action": string, "lighting": string, "mood": string, "location": string, ' +
   '"props": string, "dialogue": string, "sfx": string, "transition": string, "purpose": string, ' +
-  '"imagePrompt": string, "characterIds": string[], "productIds": string[], "locationId": (string or null)}]}. ' +
+  '"imagePrompt": string, "characterIds": string[], "productIds": string[], "locationId": (string or null), ' +
+  '"sceneRole": {"type": string, "labelKo": string, "reasonKo": string}}]}. ' +
   'Every field inside "visualBible" (globalStyle, and every field of every character/product/location) must ' +
   'ALWAYS be written in English — never Korean — regardless of the language of any other field in this ' +
   'response; see language policy below. "visual" is the primary scene description, written for a Korean ' +
@@ -61,8 +75,8 @@ const DIRECTOR_OUTPUT_CONTRACT =
   'line, copy, or voice-over for that shot (leave "" if silent). "duration" is seconds as a number. ' +
   '"imagePrompt" is a separate English-only field for an image-generation model (see language policy below). ' +
   '"characterIds"/"productIds"/"locationId" must reference ids defined in "visualBible" — use [] / null when ' +
-  'no persistent entity applies to that shot. Keep "shots" in narrative order starting at shotNumber 1. Never ' +
-  'wrap the JSON in markdown code fences.';
+  'no persistent entity applies to that shot. See the scene role instructions below for "sceneRole". Keep ' +
+  '"shots" in narrative order starting at shotNumber 1. Never wrap the JSON in markdown code fences.';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -99,6 +113,7 @@ interface DirectorShot {
   characterIds?: string[];
   productIds?: string[];
   locationId?: string | null;
+  sceneRole?: unknown;
 }
 
 interface CharacterEntity {
@@ -200,7 +215,8 @@ const SHOTS_ONLY_OUTPUT_CONTRACT =
   '"movement": string, "composition": string, "visual": string, "action": string, "lighting": string, ' +
   '"mood": string, "location": string, "props": string, "dialogue": string, "sfx": string, "transition": ' +
   'string, "purpose": string, "imagePrompt": string, "characterIds": string[], "productIds": string[], ' +
-  '"locationId": (string or null)}]}. Every field inside "visualBible" (globalStyle, and every field of ' +
+  '"locationId": (string or null), "sceneRole": {"type": string, "labelKo": string, "reasonKo": string}}]}. ' +
+  'Every field inside "visualBible" (globalStyle, and every field of ' +
   'every character/product/location) must ALWAYS be written in English — never Korean — regardless of the ' +
   'language of any other field in this response; see language policy below. "visual" is the primary scene ' +
   'description, written for a Korean production team reading a shot list (see language policy below). Each ' +
@@ -210,8 +226,9 @@ const SHOTS_ONLY_OUTPUT_CONTRACT =
   '"dialogue" is any spoken line, copy, or voice-over for that shot (leave "" if silent). "duration" is ' +
   'seconds as a number. "imagePrompt" is a separate English-only field for an image-generation model (see ' +
   'language policy below). "characterIds"/"productIds"/"locationId" must reference ids defined in ' +
-  '"visualBible" — use [] / null when no persistent entity applies. Keep "shots" in narrative order starting ' +
-  'at shotNumber 1. Never wrap the JSON in markdown code fences.';
+  '"visualBible" — use [] / null when no persistent entity applies. See the scene role instructions below for ' +
+  '"sceneRole". Keep "shots" in narrative order starting at shotNumber 1. Never wrap the JSON in markdown code ' +
+  'fences.';
 
 interface Treatment {
   title: string;
@@ -362,6 +379,59 @@ function buildBrandContextSummary(brandContext: Record<string, unknown>): string
     : '';
 }
 
+const CREATIVE_RISK_GUIDANCE: Record<string, string> = {
+  safe:
+    'Creative risk tier: SAFE. Prioritize a composition that is reliably shootable and brand-safe by ordinary ' +
+    'commercial standards. Minimize experimental visual metaphor. Favor clear, easy-to-read visual storytelling.',
+  balanced:
+    'Creative risk tier: BALANCED. Balance production practicality with creativity — familiar advertising ' +
+    'grammar with a small, deliberate distinguishing twist.',
+  creative:
+    'Creative risk tier: CREATIVE (default). Use noticeable framing, interesting transitions, and stronger ' +
+    'visual storytelling, while remaining realistically shootable.',
+  bold:
+    'Creative risk tier: BOLD. Visual metaphor, unexpected framing, surreal transitions, and non-linear visual ' +
+    'ideas with a strong visual hook are all fair game. Even at this tier, never lose the product/brand ' +
+    'relevance — creative risk controls HOW boldly the idea is expressed, not whether product/brand relevance ' +
+    'is preserved.',
+};
+
+interface DirectingOptionInput {
+  titleKo?: unknown;
+  summaryKo?: unknown;
+  visualApproach?: unknown;
+  cameraApproach?: unknown;
+  editRhythm?: unknown;
+  mood?: unknown;
+  keyTechniques?: unknown;
+}
+
+// The user picked exactly one Director's Room option — its full directing
+// context (not just its title) must shape the actual shots, so the shot list
+// genuinely reflects the chosen approach rather than a generic interpretation
+// of the treatment.
+function buildDirectingDirectionBlock(direction: unknown, creativeRisk: unknown): string {
+  if (!direction || typeof direction !== 'object') return '';
+  const d = direction as DirectingOptionInput;
+  if (typeof d.titleKo !== 'string') return '';
+  const parts = [
+    `Chosen directing approach: "${d.titleKo}" — ${typeof d.summaryKo === 'string' ? d.summaryKo : ''}`,
+    typeof d.visualApproach === 'string' ? `Visual approach: ${d.visualApproach}` : null,
+    typeof d.cameraApproach === 'string' ? `Camera approach: ${d.cameraApproach}` : null,
+    typeof d.editRhythm === 'string' ? `Edit rhythm: ${d.editRhythm}` : null,
+    typeof d.mood === 'string' ? `Mood: ${d.mood}` : null,
+    Array.isArray(d.keyTechniques) && d.keyTechniques.length > 0
+      ? `Key techniques: ${(d.keyTechniques as unknown[]).filter((k) => typeof k === 'string').join(', ')}`
+      : null,
+  ].filter((p): p is string => !!p);
+  const riskLine = typeof creativeRisk === 'string' && CREATIVE_RISK_GUIDANCE[creativeRisk]
+    ? `\n${CREATIVE_RISK_GUIDANCE[creativeRisk]}`
+    : '';
+  return `\n\n이 사용자는 Director's Room에서 아래 연출 방향을 선택했습니다. 이 방향을 실제 샷 리스트에 구체적으로 ` +
+    `반영하세요 — 제목만 참고하지 말고 visual/camera/edit rhythm/mood/key techniques를 실제 샷 구성에 사용하세요:\n` +
+    `${parts.join('\n')}${riskLine}`;
+}
+
 function buildBriefSummary(brief: Record<string, unknown>, freeformIdea: string): string {
   const lines: string[] = [];
   if (freeformIdea.trim()) lines.push(`Free-form idea: ${freeformIdea.trim()}`);
@@ -388,6 +458,24 @@ function buildBriefSummary(brief: Record<string, unknown>, freeformIdea: string)
     : summary;
 }
 
+interface SceneRole {
+  type: string;
+  labelKo: string;
+  reasonKo: string;
+}
+
+// Drops a malformed/missing sceneRole rather than failing the whole shot —
+// existing projects and any shot the model didn't tag simply show no role
+// badge in the editor instead of erroring.
+function sanitizeSceneRole(value: unknown): SceneRole | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.type !== 'string' || !v.type.trim()) return null;
+  if (typeof v.labelKo !== 'string' || !v.labelKo.trim()) return null;
+  if (typeof v.reasonKo !== 'string' || !v.reasonKo.trim()) return null;
+  return { type: v.type, labelKo: v.labelKo, reasonKo: v.reasonKo };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -402,6 +490,7 @@ Deno.serve(async (req) => {
     const {
       title, style, brief, freeformIdea, creativeDirection, copyText, aspectRatio,
       sceneCountMode, requestedSceneCount, targetDurationSeconds,
+      directingDirection, creativeRisk,
     } = await req.json();
     if (!title || typeof title !== 'string') return jsonResponse({ error: 'title required' }, 400);
     if (!style || !['sketch', 'animation', 'live_action'].includes(style)) {
@@ -432,14 +521,15 @@ Deno.serve(async (req) => {
       const sceneCountInstruction = buildSceneCountInstruction(
         sceneCountMode, requestedSceneCount, targetDurationSeconds, copyText
       );
-      const userPrompt = `${SHOTS_ONLY_OUTPUT_CONTRACT}\n\n${ENTITY_INSTRUCTIONS}\n\n다음은 광고 브리프입니다:\n${briefSummary}\n\n` +
+      const userPrompt = `${SHOTS_ONLY_OUTPUT_CONTRACT}\n\n${SCENE_ROLE_INSTRUCTIONS}\n\n${ENTITY_INSTRUCTIONS}\n\n다음은 광고 브리프입니다:\n${briefSummary}\n\n` +
         `다음은 클라이언트가 이미 승인한 Creative Direction입니다. 이 방향을 그대로 실행하는 샷 리스트를 ` +
         `만드세요(방향을 새로 해석하지 마세요):\n제목: ${treatment.title}\n컨셉: ${treatment.concept}\n` +
         `연출 방향: ${treatment.creativeDirection}\nVisual language: ${treatment.visualLanguage.join(', ')}\n` +
         `길이: ${treatment.approach.duration ?? '미지정'}초, 예상 샷 수: ${treatment.approach.estimatedShots ?? '미지정'}, ` +
         `대사 스타일: ${treatment.approach.dialogueStyle}, 제품 노출: ${treatment.approach.productReveal}, ` +
         `카메라 스타일: ${treatment.approach.cameraStyle}\n` +
-        `각 샷은 실제 촬영에 바로 쓸 수 있을 만큼 구체적이어야 합니다.${sceneCountInstruction}${buildCopySection(copyText)}`;
+        `각 샷은 실제 촬영에 바로 쓸 수 있을 만큼 구체적이어야 합니다.${sceneCountInstruction}${buildCopySection(copyText)}` +
+        buildDirectingDirectionBlock(directingDirection, creativeRisk);
 
       let shotsResult = await fetchShotsOnly(userPrompt);
       if ('error' in shotsResult) return jsonResponse({ error: shotsResult.error }, 502);
@@ -469,7 +559,7 @@ Deno.serve(async (req) => {
     } else {
       const briefSummary = buildBriefSummary(brief ?? {}, freeformIdea ?? '');
 
-      const userPrompt = `${DIRECTOR_OUTPUT_CONTRACT}\n\n${ENTITY_INSTRUCTIONS}\n\n다음은 광고 브리프입니다:\n${briefSummary}\n\n` +
+      const userPrompt = `${DIRECTOR_OUTPUT_CONTRACT}\n\n${SCENE_ROLE_INSTRUCTIONS}\n\n${ENTITY_INSTRUCTIONS}\n\n다음은 광고 브리프입니다:\n${briefSummary}\n\n` +
         `이 브리프를 바탕으로 광고 감독으로서 전체 스토리보드를 연출하세요. 광고의 목적과 타깃, 플랫폼, ` +
         `길이에 맞는 샷 개수를 스스로 판단하세요(대략 3~8개 샷 권장). 각 샷은 실제 촬영에 바로 쓸 수 있을 만큼 ` +
         `구체적이어야 합니다.${buildCopySection(copyText)}`;
@@ -527,6 +617,8 @@ Deno.serve(async (req) => {
         overall_prompt: concept,
         creative_direction: creativeDirectionText,
         creative_treatment: treatment ?? null,
+        selected_directing_direction: (directingDirection && typeof directingDirection === 'object') ? directingDirection : null,
+        creative_risk: (typeof creativeRisk === 'string' && CREATIVE_RISK_GUIDANCE[creativeRisk]) ? creativeRisk : null,
         brief: brief ?? {},
         visual_bible: visualBible,
       })
@@ -563,6 +655,7 @@ Deno.serve(async (req) => {
           products: Array.isArray(shot.productIds) ? shot.productIds : [],
           location: typeof shot.locationId === 'string' ? shot.locationId : null,
         },
+        scene_role: sanitizeSceneRole(shot.sceneRole),
       }));
 
     const { error: cutsError } = await supabase.from('cuts').insert(cutRows);

@@ -13,7 +13,8 @@ const OUTPUT_CONTRACT =
   '"purpose": string, "imagePrompt": string, "characterIds": string[], "productIds": string[], ' +
   '"locationId": (string or null), "appliedCreativeDNA": [{"category": "camera"|"lighting"|"composition"|' +
   '"editRhythm"|"colorMood"|"creativePrinciple", "key": string, "labelKo": string}], ' +
-  '"creativeDNAApplicationNote": string}}. The "location" field is a short KOREAN phrase naming where this shot ' +
+  '"creativeDNAApplicationNote": string, ' +
+  '"sceneRole": {"type": string, "labelKo": string, "reasonKo": string} | null}}. The "location" field is a short KOREAN phrase naming where this shot ' +
   'takes place for a human reading the shot list (e.g. "모던한 아파트 거실") — do not confuse it with the ' +
   'persistent location entity (referenced only via "locationId"), which stays in English elsewhere. ' +
   '"imagePrompt" is a separate English-only field for an image-generation model (see language policy below). ' +
@@ -22,7 +23,14 @@ const OUTPUT_CONTRACT =
   'instruction explicitly changes which entity appears in this shot. Never invent a new entity id. ' +
   '"appliedCreativeDNA" and "creativeDNAApplicationNote" carry this shot\'s Creative DNA context — see the ' +
   'Creative DNA section below for how to handle them (if that section is absent, this shot has none: always ' +
-  'return an empty array and empty string for them). Never wrap the JSON in markdown code fences.';
+  'return an empty array and empty string for them). See the scene role preservation note below for ' +
+  '"sceneRole". Never wrap the JSON in markdown code fences.';
+
+const SCENE_ROLE_PRESERVATION_NOTE =
+  'Scene role: this shot currently has the advertising role shown below. By default, KEEP "sceneRole" exactly ' +
+  'as given — a single-shot edit should not silently lose it. Only change it if this edit instruction genuinely ' +
+  'changes what job this shot does in the ad (e.g. "rewrite" turning a product-detail shot into a call-to-action ' +
+  'shot). If this shot has no role recorded, return null.';
 
 const CREATIVE_DNA_PRESERVATION_NOTE =
   'Creative DNA context: this shot currently has these Creative DNA elements applied (from an earlier ' +
@@ -177,6 +185,22 @@ interface RevisedShot {
   locationId?: string | null;
   appliedCreativeDNA?: unknown;
   creativeDNAApplicationNote?: string;
+  sceneRole?: unknown;
+}
+
+interface SceneRole {
+  type: string;
+  labelKo: string;
+  reasonKo: string;
+}
+
+function sanitizeSceneRole(value: unknown): SceneRole | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.type !== 'string' || !v.type.trim()) return null;
+  if (typeof v.labelKo !== 'string' || !v.labelKo.trim()) return null;
+  if (typeof v.reasonKo !== 'string' || !v.reasonKo.trim()) return null;
+  return { type: v.type, labelKo: v.labelKo, reasonKo: v.reasonKo };
 }
 
 function isValidShot(value: unknown): value is { shot: RevisedShot } {
@@ -248,6 +272,10 @@ Deno.serve(async (req) => {
       ? `\n\n${CREATIVE_DNA_PRESERVATION_NOTE}\n\nCurrently applied: ${JSON.stringify(currentAppliedDna)}\n` +
         `Current application note: ${JSON.stringify(cut.creative_dna_application_note ?? '')}`
       : '';
+    const currentSceneRole = sanitizeSceneRole(cut.scene_role);
+    const sceneRoleBlock = currentSceneRole
+      ? `\n\n${SCENE_ROLE_PRESERVATION_NOTE}\n\nCurrent scene role: ${JSON.stringify(currentSceneRole)}`
+      : '';
 
     const userPrompt = `${OUTPUT_CONTRACT}\n\n${PRODUCT_CONTEXT_INSTRUCTIONS}\n\n` +
       `Product / concept (do not change): ${project.overall_prompt}\n\n` +
@@ -256,7 +284,7 @@ Deno.serve(async (req) => {
       `Current shot (currently references characterIds=${JSON.stringify(currentEntityRefs.characters ?? [])}, ` +
       `productIds=${JSON.stringify(currentEntityRefs.products ?? [])}, ` +
       `locationId=${JSON.stringify(currentEntityRefs.location ?? null)}):\n${JSON.stringify(currentShot)}\n\n` +
-      `Edit instruction: ${editInstruction}` + dnaBlock;
+      `Edit instruction: ${editInstruction}` + dnaBlock + sceneRoleBlock;
 
     const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -330,6 +358,7 @@ Deno.serve(async (req) => {
       creative_dna_application_note: typeof shot.creativeDNAApplicationNote === 'string'
         ? shot.creativeDNAApplicationNote
         : '',
+      scene_role: sanitizeSceneRole(shot.sceneRole) ?? currentSceneRole,
       image_url: null,
       generation_status: 'idle',
     }).eq('id', cutId);

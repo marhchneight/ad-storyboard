@@ -4,12 +4,12 @@ import type { CreativeTreatment } from '../../types';
 interface Props {
   treatment: CreativeTreatment;
   busy: boolean;
-  onDirect: () => void;
+  onEnterDirectorsRoom: () => void;
   onTryAnother: () => void;
   onRevise: (instruction: string) => void;
 }
 
-export default function CreativeDirectionPanel({ treatment, busy, onDirect, onTryAnother, onRevise }: Props) {
+export default function CreativeDirectionPanel({ treatment, busy, onEnterDirectorsRoom, onTryAnother, onRevise }: Props) {
   const [instruction, setInstruction] = useState('');
 
   function handleReviseSubmit(e: React.FormEvent) {
@@ -54,8 +54,8 @@ export default function CreativeDirectionPanel({ treatment, busy, onDirect, onTr
       )}
 
       <div className="cd-actions">
-        <button type="button" className="btn-primary btn-block" onClick={onDirect} disabled={busy}>
-          {busy ? '연출 중...' : 'Direct the Storyboard →'}
+        <button type="button" className="btn-primary btn-block" onClick={onEnterDirectorsRoom} disabled={busy}>
+          {busy ? '연출 방향을 준비하는 중...' : '연출 방향 정하기 →'}
         </button>
         <button type="button" className="btn-secondary" onClick={onTryAnother} disabled={busy}>
           Try Another Direction

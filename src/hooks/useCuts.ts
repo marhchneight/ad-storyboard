@@ -102,6 +102,7 @@ export function useCuts(projectId: string) {
         entity_refs: cut.entity_refs,
         applied_creative_dna: cut.applied_creative_dna,
         creative_dna_application_note: cut.creative_dna_application_note,
+        scene_role: cut.scene_role,
       };
       if (currentIds.has(cut.id)) {
         await supabase.from('cuts').update(fields).eq('id', cut.id);

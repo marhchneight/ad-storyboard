@@ -112,6 +112,7 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
         )}
       </td>
       <td className="cut-cell">
+        <SceneRoleIndicator cut={cut} />
         <textarea value={sceneDescription} onChange={(e) => setSceneDescription(e.target.value)}
           onBlur={() => onUpdate({ scene_description: sceneDescription })} />
       </td>
@@ -228,6 +229,21 @@ function AppliedDna({ cut }: { cut: Cut }) {
           </div>
         )}
       </div>
+    </details>
+  );
+}
+
+// Compact secondary metadata — only ever shown when scene_role is actually
+// present (AI-assigned during storyboard generation), same "no guessed data"
+// rule as AppliedDna above. A one-line summary, click to see the reason.
+function SceneRoleIndicator({ cut }: { cut: Cut }) {
+  const role = cut.scene_role;
+  if (!role) return null;
+
+  return (
+    <details className="scene-role">
+      <summary>역할 · {role.labelKo}</summary>
+      <p className="scene-role-reason">{role.reasonKo}</p>
     </details>
   );
 }

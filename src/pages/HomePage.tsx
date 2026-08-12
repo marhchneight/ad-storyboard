@@ -8,10 +8,11 @@ import IdeaMode from '../components/home/IdeaMode';
 import ReferenceMode from '../components/home/ReferenceMode';
 import ProductMode from '../components/home/ProductMode';
 import CreativeDirectionPanel from '../components/home/CreativeDirectionPanel';
+import DirectorsRoom from '../components/home/DirectorsRoom';
 import RecentProjects from '../components/home/RecentProjects';
 import type {
-  AspectRatio, CreativeBrief, CreativeDna, CreativeTreatment, Project, SceneCountMode, StoryboardStyle,
-  TargetDurationSeconds,
+  AspectRatio, CreativeBrief, CreativeDna, CreativeRisk, CreativeTreatment, DirectingOption, Project,
+  SceneCountMode, StoryboardStyle, TargetDurationSeconds,
 } from '../types';
 
 const ASPECT_RATIOS: { id: AspectRatio; label: string }[] = [
@@ -42,6 +43,7 @@ export default function HomePage() {
   const [targetDurationSeconds, setTargetDurationSeconds] = useState<TargetDurationSeconds>(15);
   const [treatment, setTreatment] = useState<CreativeTreatment | null>(null);
   const [context, setContext] = useState<GenerationContext>({});
+  const [roomOpen, setRoomOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [treatmentBusy, setTreatmentBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +68,7 @@ export default function HomePage() {
   function handleStartOver() {
     setTreatment(null);
     setContext({});
+    setRoomOpen(false);
     setError(null);
   }
 
@@ -97,19 +100,21 @@ export default function HomePage() {
     }
   }
 
-  async function handleDirect() {
+  async function handleDirect(direction?: DirectingOption, creativeRisk?: CreativeRisk) {
     if (!treatment || treatmentBusy) return;
     setError(null);
     setTreatmentBusy(true);
     try {
       const projectId = await directStoryboard({
-        title: treatment.title,
+        title: direction?.titleKo ? `${treatment.title} · ${direction.titleKo}` : treatment.title,
         style,
         aspectRatio,
         brief: context.brief ?? {},
         freeformIdea: context.freeformIdea ?? treatment.concept,
         creativeDirection: treatment,
         copyText: context.copyText,
+        directingDirection: direction,
+        creativeRisk,
         ...sceneCountParams,
       });
       navigate(`/projects/${projectId}`);
@@ -117,6 +122,19 @@ export default function HomePage() {
       setError(err instanceof Error ? err.message : String(err));
       setTreatmentBusy(false);
     }
+  }
+
+  function handleEnterDirectorsRoom() {
+    setError(null);
+    setRoomOpen(true);
+  }
+
+  function handleBackFromDirectorsRoom() {
+    setRoomOpen(false);
+  }
+
+  function handleSkipDirectorsRoom() {
+    handleDirect();
   }
 
   const styleField = (
@@ -242,6 +260,18 @@ export default function HomePage() {
             <RecentProjects projects={projects} />
           </div>
         </>
+      ) : roomOpen ? (
+        <>
+          {error && <p className="error">{error}</p>}
+          <DirectorsRoom
+            treatment={treatment}
+            context={context}
+            busy={treatmentBusy}
+            onSelect={handleDirect}
+            onSkip={handleSkipDirectorsRoom}
+            onBack={handleBackFromDirectorsRoom}
+          />
+        </>
       ) : (
         <>
           <button type="button" className="btn-text" onClick={handleStartOver} disabled={treatmentBusy}>
@@ -251,7 +281,7 @@ export default function HomePage() {
           <CreativeDirectionPanel
             treatment={treatment}
             busy={treatmentBusy}
-            onDirect={handleDirect}
+            onEnterDirectorsRoom={handleEnterDirectorsRoom}
             onTryAnother={handleTryAnother}
             onRevise={handleRevise}
           />

@@ -18,6 +18,7 @@ function koreanFontArrayBuffer(): ArrayBuffer {
 const project: Project = {
   id: 'p1', user_id: 'u1', title: '테스트 프로젝트', style: 'sketch', aspect_ratio: '1:1',
   overall_prompt: '콘셉트', brief: {}, creative_direction: '', creative_dna: null, creative_treatment: null,
+  selected_directing_direction: null, creative_risk: null,
   created_at: '', updated_at: '',
 };
 
@@ -25,7 +26,7 @@ const shotDetailDefaults = {
   duration_seconds: null, shot_size: '', lens: '', angle: '', movement: '', composition: '',
   action: '', lighting: '', mood: '', location: '', props: '', sfx: '', transition: '', purpose: '',
   image_prompt: '', entity_refs: { characters: [], products: [], location: null },
-  applied_creative_dna: [], creative_dna_application_note: '',
+  applied_creative_dna: [], creative_dna_application_note: '', scene_role: null,
 };
 
 const cuts: Cut[] = [
