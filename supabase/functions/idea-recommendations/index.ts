@@ -116,31 +116,37 @@ async function getCachedTrendSignals(
 // ---------------------------------------------------------------------------
 const SYSTEM_ROLE =
   'You are a bilingual (Korean/English) advertising creative strategist for a professional ad-storyboard tool. ' +
-  'You study current Korean and global advertising/content trends and turn them into original, concrete, ' +
-  'storyboard-ready ad concepts a director could immediately start boarding. ' +
+  'You study current Korean and global advertising/content trends and turn them into original, short, ' +
+  'tone-and-manner-first creative direction prompts a director could immediately start boarding from. ' +
   'Use current advertising trends as signals, not templates to copy. ' +
   'Generate original creative directions inspired by market shifts while avoiding direct imitation of ' +
   'identifiable campaigns — never name a real brand, campaign, or influencer, and never describe a specific ' +
   'existing ad closely enough that it reads as a copy of it. ' +
-  'Prioritize creative diversity, visual specificity, cultural relevance, and storyboard potential. ' +
+  'Prioritize creative diversity, visual specificity, cultural relevance, and storyboard potential — but keep ' +
+  'every idea SHORT: a tone/mood/rhythm-first phrase, not a written-out scene or mini-script. ' +
   'Internally think in three steps for each idea — (1) which trend signal(s) it draws on, (2) your own creative ' +
-  'interpretation of that signal, not a literal restatement of it, (3) a concrete storyboard-ready starting ' +
-  'point — but only the final result belongs in your output, never the intermediate reasoning.';
+  'interpretation of that signal, not a literal restatement of it, (3) a short tone-and-manner phrase capturing ' +
+  'that direction — but only the final short phrase belongs in your output, never the intermediate reasoning.';
 
 const OUTPUT_CONTRACT =
   'Respond with a single JSON object, and nothing else: {"examples": [{"text": string, "category": string, ' +
   '"trendSignals": string[], "market": "KR"|"GLOBAL"|"MIXED"}]}. "examples" must have exactly 5 items. ' +
-  'Each "text" is natural, concise Korean (1-2 sentences, a real creative brief a director could act on — never ' +
-  'a bare genre label like "UGC 광고" or "TikTok 광고" on its own) that includes at least 3 of: product/category, ' +
-  'situation, visual hook, tone/mood, format, target audience, unusual creative device. "category" is your own ' +
-  'short label for that idea\'s creative direction (e.g. emotional brand film, short-form/social, product-led, ' +
-  'humor/twist, visual-experimental — invent your own wording, freely). "trendSignals" is 1-3 short tags naming ' +
-  'the signal(s) that idea draws on. "market" reflects whether the idea leans Korean-market-specific, globally ' +
-  'generic, or a blend. Never wrap the JSON in markdown code fences.\n\n' +
+  'Each "text" is a SHORT Korean tone-and-manner phrase — roughly 10-25 Korean characters, at most one short ' +
+  'clause (never a full multi-clause sentence or a written-out scene/script). Describe the mood/tone, pacing or ' +
+  'rhythm, visual texture, or one distinctive creative device — pick at most 1-2 of these, optionally with a ' +
+  'format/duration hint. Do NOT describe a specific scene, situation, or product-usage moment in detail — this ' +
+  'is a creative-direction starting point, not a scripted brief. Never a bare genre label alone either (e.g. ' +
+  'just "TikTok 광고" with nothing else) — it must carry some tone/mood content. Good length/style examples ' +
+  '(invent new ones, never reuse these): "차갑고 몽환적인 새벽 감성, 정적인 롱테이크", "빠른 컷의 리드미컬한 ' +
+  '숏폼, 발랄한 텐션", "미니멀한 원컬러 비주얼, 절제된 무드". "category" is your own short label for that idea\'s ' +
+  'creative direction (e.g. emotional brand film, short-form/social, product-led, humor/twist, ' +
+  'visual-experimental — invent your own wording, freely). "trendSignals" is 1-3 short tags naming the signal(s) ' +
+  'that idea draws on. "market" reflects whether the idea leans Korean-market-specific, globally generic, or a ' +
+  'blend. Never wrap the JSON in markdown code fences.\n\n' +
   'Before finalizing, check the 5 ideas against each other and make sure they differ across as many of these as ' +
-  'possible: duration, camera language, storytelling structure, emotional tone, product category, target ' +
-  'audience, platform, and visual hook. No two ideas may share the same combination of format + tone + platform. ' +
-  'If two ideas are too similar, silently replace one before responding — never show your revision process.';
+  'possible: pacing/rhythm, camera language, emotional tone, visual texture, and platform/format hint. No two ' +
+  'ideas may share the same combination of tone + pacing. If two ideas are too similar, silently replace one ' +
+  'before responding — never show your revision process.';
 
 function buildUserContent(trend: TrendResult, avoid: string[]): string {
   const parts: string[] = [OUTPUT_CONTRACT];
@@ -221,26 +227,26 @@ async function callOpenAiExamples(trend: TrendResult, avoid: string[]): Promise<
 // never presented to the user as a real-time market analysis.
 // ---------------------------------------------------------------------------
 const FALLBACK_EXAMPLES: Omit<CreativeExample, 'id'>[] = [
-  { text: '퇴근 후 냉장고를 열어보는 순간부터 시작하는 15초 야식 브랜드 광고. 휴대폰으로 우연히 찍은 듯한 자연스러운 시점.', category: '숏폼/SNS형', market: 'KR' },
-  { text: '제품을 마지막 3초에만 등장시키는 60초 향수 브랜드 필름. 새벽 도시의 정적인 롱테이크.', category: '감성/브랜드 필름형', market: 'GLOBAL' },
-  { text: '운동화 끈을 묶는 손만 클로즈업으로 보여주다가 급격히 속도를 올리는 30초 러닝화 광고. Gen-Z 타깃.', category: '제품 중심형', market: 'MIXED' },
-  { text: '배달 음식이 도착하기 전, 기다리는 사람의 표정 변화만으로 스토리를 만드는 유머러스한 15초 커머스 광고.', category: '유머/반전형', market: 'KR' },
-  { text: '제품이 화면에 단 한 번도 정면으로 등장하지 않는 실험적인 뷰티 브랜드 필름. 거울과 반사면만으로 형태를 암시.', category: '비주얼 실험형', market: 'GLOBAL' },
-  { text: '카페 창가 자리에 앉은 사람의 하루를 타임랩스로 압축한 20초 커피 브랜드 광고. 계절이 한 컷 안에서 바뀐다.', category: '감성/브랜드 필름형', market: 'KR' },
-  { text: '언박싱 영상처럼 시작하지만 실제로는 아무것도 꺼내지 않는 반전형 15초 테크 제품 광고.', category: '유머/반전형', market: 'GLOBAL' },
-  { text: '친구에게 추천하듯 말하는 셀프캠 톤의 30초 스킨케어 리뷰형 광고. 편집 없이 이어지는 롱컷.', category: '숏폼/SNS형', market: 'KR' },
-  { text: '제품의 소재(질감)만 극단적으로 클로즈업해서 추상화처럼 보여주는 10초 버티컬 광고. 사운드 디자인이 핵심.', category: '비주얼 실험형', market: 'GLOBAL' },
-  { text: '두 사람이 같은 제품을 정반대 방식으로 사용하는 모습을 스플릿 스크린으로 대비시키는 20초 라이프스타일 광고.', category: '비주얼 실험형', market: 'MIXED' },
-  { text: '출근길 지하철에서 이어폰을 꽂는 순간부터 시작하는 15초 오디오 브랜드 광고. 도시 소음이 서서히 음악으로 바뀐다.', category: '감성/브랜드 필름형', market: 'KR' },
-  { text: '반려동물의 시점(POV)으로 촬영한 30초 펫푸드 광고. 사람의 얼굴은 한 번도 정면으로 나오지 않는다.', category: '비주얼 실험형', market: 'GLOBAL' },
-  { text: '실패한 시도들을 빠르게 몽타주로 보여준 뒤 마지막에 성공하는 6초 초단편 스포츠 브랜드 광고.', category: '유머/반전형', market: 'MIXED' },
-  { text: '제품 리뷰를 남기는 실제 사용자처럼 보이는 세로형 15초 커머스 광고. 자막과 손글씨 스타일 텍스트 사용.', category: '숏폼/SNS형', market: 'KR' },
-  { text: '한 가지 색만으로 구성된 미니멀한 30초 향수 브랜드 필름. 향의 느낌을 색과 질감으로만 은유한다.', category: '비주얼 실험형', market: 'GLOBAL' },
-  { text: '가족 식사 준비 과정을 담담하게 따라가는 60초 브랜드 다큐형 광고. 내레이션 없이 소리만으로 구성.', category: '감성/브랜드 필름형', market: 'KR' },
-  { text: '제품을 극한 상황에서 테스트하는 코믹한 15초 내구성 광고. 진지한 톤으로 시작해 과장되게 무너진다.', category: '유머/반전형', market: 'GLOBAL' },
-  { text: '한 사람의 아침 루틴을 초 단위로 쪼개 빠른 컷으로 보여주는 20초 뷰티 브랜드 광고. 리듬감 있는 편집이 핵심.', category: '숏폼/SNS형', market: 'MIXED' },
-  { text: '제품 없이 그 제품이 남긴 흔적(자국, 그림자, 얼룩)만으로 서사를 완성하는 실험적인 30초 캠페인 필름.', category: '비주얼 실험형', market: 'GLOBAL' },
-  { text: '동네 편의점 사장님의 하루 속에 자연스럽게 스며든 제품을 보여주는 다큐멘터리 톤의 30초 커머스 광고.', category: '감성/브랜드 필름형', market: 'KR' },
+  { text: '차갑고 몽환적인 새벽 감성, 정적인 롱테이크', category: '감성/브랜드 필름형', market: 'GLOBAL' },
+  { text: '빠른 컷의 리드미컬한 숏폼, 발랄한 텐션', category: '숏폼/SNS형', market: 'KR' },
+  { text: '미니멀한 원컬러 비주얼, 절제된 무드', category: '비주얼 실험형', market: 'GLOBAL' },
+  { text: '다큐멘터리 톤, 내레이션 없이 소리로만', category: '감성/브랜드 필름형', market: 'KR' },
+  { text: '유쾌한 반전이 있는 코믹한 15초 톤', category: '유머/반전형', market: 'MIXED' },
+  { text: '따뜻하고 노스탤직한 감성 필름', category: '감성/브랜드 필름형', market: 'KR' },
+  { text: '거칠고 로우파이한 핸드헬드 무드', category: '숏폼/SNS형', market: 'GLOBAL' },
+  { text: '고요하고 사색적인 클로즈업 중심 톤', category: '제품 중심형', market: 'MIXED' },
+  { text: '발랄한 컬러감, 경쾌한 팝 리듬', category: '숏폼/SNS형', market: 'KR' },
+  { text: '잔잔한 슬로우 모션, 감성적인 여운', category: '감성/브랜드 필름형', market: 'GLOBAL' },
+  { text: '실험적인 흑백 대비, 그래픽적인 구도', category: '비주얼 실험형', market: 'GLOBAL' },
+  { text: '친근한 셀프캠 톤, 편집 없는 롱컷', category: '숏폼/SNS형', market: 'KR' },
+  { text: '긴장감 있는 서스펜스풍 카운트다운', category: '유머/반전형', market: 'MIXED' },
+  { text: '따스한 가족 다큐 톤, 담담한 시선', category: '감성/브랜드 필름형', market: 'KR' },
+  { text: '미래지향적인 네온톤, 테크 무드', category: '비주얼 실험형', market: 'GLOBAL' },
+  { text: '소박하고 정직한 로컬 브랜드 톤', category: '제품 중심형', market: 'KR' },
+  { text: '몽타주로 빠르게 전개되는 에너제틱한 톤', category: '숏폼/SNS형', market: 'MIXED' },
+  { text: '절제된 럭셔리 톤, 느린 카메라 무브', category: '감성/브랜드 필름형', market: 'GLOBAL' },
+  { text: '장난스러운 애니메이션풍 그래픽 무드', category: '비주얼 실험형', market: 'MIXED' },
+  { text: '진지하게 시작해 유쾌하게 반전되는 톤', category: '유머/반전형', market: 'KR' },
 ];
 
 function pickFallback(avoid: string[], count = 5): CreativeExample[] {
