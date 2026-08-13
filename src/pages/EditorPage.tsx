@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   DndContext,
@@ -26,6 +26,17 @@ import CreativeDnaPanel from '../components/creative-dna/CreativeDnaPanel';
 import ThemeToggle from '../components/ThemeToggle';
 import type { Cut, Project } from '../types';
 
+interface ImageGenerationProgress {
+  total: number;
+  completed: number;
+  failed: number;
+  isGenerating: boolean;
+}
+
+// How long the completion state ("8 / 8 이미지 생성 완료" or "8개 중 7개 완료 · 1개 실패")
+// stays visible before the progress UI resets to the plain button.
+const BATCH_COMPLETION_DISPLAY_MS = 1500;
+
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>();
   const [project, setProject] = useState<Project | null>(null);
@@ -40,13 +51,22 @@ export default function EditorPage() {
   const [lastChanges, setLastChanges] = useState<string[] | null>(null);
   const [history, setHistory] = useState<Cut[][]>([]);
   const [rouletteConstraint, setRouletteConstraint] = useState<string | null>(null);
-  const [batchGenerating, setBatchGenerating] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{ cutNumber: number; completed: number; total: number } | null>(null);
-  const [batchSummary, setBatchSummary] = useState<string | null>(null);
+  // Drives the "전체 이미지 생성" progress bar. Non-null for the whole batch run, including a
+  // brief completion display (isGenerating: false) before resetting to null — see
+  // handleGenerateAll. `completed`/`failed` are real per-cut outcomes, never a fake timer.
+  const [imageGenProgress, setImageGenProgress] = useState<ImageGenerationProgress | null>(null);
+  const batchGenerating = imageGenProgress !== null;
+  const batchResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { cuts, updateCut, generateImage, addCut, removeCut, reorderCuts, refresh, restoreSnapshot } = useCuts(id!);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
+
+  useEffect(() => {
+    return () => {
+      if (batchResetTimeoutRef.current) clearTimeout(batchResetTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     supabase.from('projects').select('*').eq('id', id).single().then(({ data }) => {
@@ -261,43 +281,44 @@ export default function EditorPage() {
   // depend on earlier ones having already finished.
   async function handleGenerateAll() {
     if (batchGenerating) return;
-    const targets = cuts
-      .map((cut, i) => ({ cut, cutNumber: i + 1 }))
-      .filter(({ cut }) => !cut.image_url && cut.generation_status !== 'generating');
-    if (targets.length === 0) {
-      setBatchSummary('모든 컷의 이미지가 이미 생성되어 있습니다.');
-      return;
-    }
+    const targets = cuts.filter((cut) => !cut.image_url && cut.generation_status !== 'generating');
+    if (targets.length === 0) return; // button is disabled in this state; nothing to do
+
+    if (batchResetTimeoutRef.current) clearTimeout(batchResetTimeoutRef.current);
     setError(null);
-    setBatchSummary(null);
-    setBatchGenerating(true);
-    let succeeded = 0;
-    const failedNumbers: number[] = [];
-    for (let i = 0; i < targets.length; i++) {
-      const { cut, cutNumber } = targets[i];
-      setBatchProgress({ cutNumber, completed: i, total: targets.length });
+    setImageGenProgress({ total: targets.length, completed: 0, failed: 0, isGenerating: true });
+
+    for (const cut of targets) {
       try {
         await generateImage(cut.id);
-        succeeded++;
+        setImageGenProgress((prev) => prev && { ...prev, completed: prev.completed + 1 });
       } catch {
-        failedNumbers.push(cutNumber);
+        setImageGenProgress((prev) => prev && { ...prev, failed: prev.failed + 1 });
       }
     }
-    setBatchProgress(null);
-    setBatchGenerating(false);
-    const parts = [`${succeeded}개의 이미지를 생성했습니다.`];
-    if (failedNumbers.length > 0) {
-      parts.push(`${failedNumbers.join(', ')}번 컷 생성에 실패했습니다. 다시 시도해주세요.`);
-    }
-    setBatchSummary(parts.join(' '));
+
+    setImageGenProgress((prev) => prev && { ...prev, isGenerating: false });
+    batchResetTimeoutRef.current = setTimeout(() => setImageGenProgress(null), BATCH_COMPLETION_DISPLAY_MS);
   }
 
   if (!project) return <div className="page-shell">로딩 중...</div>;
 
   const pendingImageCount = cuts.filter((c) => !c.image_url && c.generation_status !== 'generating').length;
-  const generateAllLabel = batchGenerating && batchProgress
-    ? `${batchProgress.cutNumber}번 컷 생성 중... ${batchProgress.completed}/${batchProgress.total} 완료`
+  const generateAllLabel = imageGenProgress?.isGenerating
+    ? '이미지 생성 중…'
     : pendingImageCount > 0 ? `전체 이미지 생성 (${pendingImageCount})` : '전체 이미지 생성';
+
+  const batchProcessed = imageGenProgress ? imageGenProgress.completed + imageGenProgress.failed : 0;
+  const batchPercent = imageGenProgress && imageGenProgress.total > 0
+    ? Math.round((batchProcessed / imageGenProgress.total) * 100)
+    : 0;
+  const batchStatusText = imageGenProgress
+    ? imageGenProgress.isGenerating
+      ? `이미지 생성 중 ${batchProcessed} / ${imageGenProgress.total} · ${batchPercent}%`
+      : imageGenProgress.failed > 0
+        ? `${imageGenProgress.total}개 중 ${imageGenProgress.completed}개 완료 · ${imageGenProgress.failed}개 실패`
+        : `${imageGenProgress.total} / ${imageGenProgress.total} 이미지 생성 완료`
+    : '';
 
   const dnaAppliedCount = cuts.filter((c) => c.applied_creative_dna.length > 0).length;
   const firstDnaAppliedCutId = cuts.find((c) => c.applied_creative_dna.length > 0)?.id ?? null;
@@ -318,10 +339,6 @@ export default function EditorPage() {
         <div className="page-header-actions">
           <button type="button" className="btn-secondary" onClick={handleUndo} disabled={history.length === 0 || directing}>
             Undo
-          </button>
-          <button type="button" className="btn-secondary" onClick={handleGenerateAll}
-            disabled={batchGenerating || pendingImageCount === 0}>
-            {generateAllLabel}
           </button>
           <button type="button" className="btn-secondary" onClick={handleDownloadAllImages} disabled={zipping}>
             {zipping
@@ -378,6 +395,24 @@ export default function EditorPage() {
           onBlur={saveOverallPrompt} />
       </div>
 
+      <div className="storyboard-section-header">
+        <h2 className="storyboard-section-title">콘티</h2>
+        <div className="storyboard-section-actions">
+          <button type="button" className="btn-secondary" onClick={handleGenerateAll}
+            disabled={batchGenerating || pendingImageCount === 0}>
+            {generateAllLabel}
+          </button>
+          {imageGenProgress && (
+            <div className="batch-progress" role="status" aria-live="polite">
+              <div className="batch-progress-bar-track">
+                <div className="batch-progress-bar-fill" style={{ width: `${batchPercent}%` }} />
+              </div>
+              <span className="batch-progress-label">{batchStatusText}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={cuts.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           <div className="cut-table-wrap">
@@ -413,7 +448,6 @@ export default function EditorPage() {
           </div>
         </SortableContext>
       </DndContext>
-      {batchSummary && <p className="field-hint">{batchSummary}</p>}
       {error && <p className="error">{error}</p>}
       <button type="button" className="btn-secondary" onClick={handleAddCut}>+ 컷 추가</button>
     </div>
