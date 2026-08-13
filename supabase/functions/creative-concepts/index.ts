@@ -1,4 +1,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { validateString } from '../_shared/validation.ts';
+import { sanitizeUpstreamError, sanitizeUnexpectedError } from '../_shared/errors.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { logAiUsage } from '../_shared/usageLog.ts';
 
 const SYSTEM_ROLE =
   'You are an award-winning commercial creative director. A client has a product but no ad idea yet. Propose ' +
@@ -87,11 +91,29 @@ Deno.serve(async (req) => {
     if (!token) return jsonResponse({ error: 'unauthorized' }, 401);
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user) return jsonResponse({ error: 'unauthorized' }, 401);
+    const userId = userData.user.id;
+
+    const rateLimit = await checkRateLimit(supabase, userId, 'lightweight_ai');
+    if (!rateLimit.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'creative_concepts', status: 'rate_limited' });
+      return jsonResponse(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', code: 'RATE_LIMITED', retryAfterSeconds: rateLimit.retryAfterSeconds },
+        429,
+      );
+    }
 
     const { product, mood, platform, targetAudience, brandContext } = await req.json();
     if (!product || typeof product !== 'string' || !product.trim()) {
       return jsonResponse({ error: 'product required' }, 400);
     }
+    const productErr = validateString(product, 'product', { maxLength: 500 });
+    if (productErr) return jsonResponse({ error: productErr }, 400);
+    const moodErr = validateString(mood, 'mood', { maxLength: 500 });
+    if (moodErr) return jsonResponse({ error: moodErr }, 400);
+    const platformErr = validateString(platform, 'platform', { maxLength: 500 });
+    if (platformErr) return jsonResponse({ error: platformErr }, 400);
+    const targetAudienceErr = validateString(targetAudience, 'targetAudience', { maxLength: 500 });
+    if (targetAudienceErr) return jsonResponse({ error: targetAudienceErr }, 400);
 
     const lines = [`Product / Brand: ${product.trim()}`];
     if (typeof mood === 'string' && mood.trim()) lines.push(`Mood: ${mood.trim()}`);
@@ -124,7 +146,7 @@ Deno.serve(async (req) => {
 
     if (!openaiRes.ok) {
       const errText = await openaiRes.text();
-      return jsonResponse({ error: `openai error: ${errText}` }, 502);
+      return jsonResponse(sanitizeUpstreamError(errText, 'creative-concepts'), 502);
     }
 
     const openaiJson = await openaiRes.json();
@@ -142,8 +164,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'AI가 올바른 형식의 컨셉을 반환하지 않았습니다. 다시 시도해주세요.' }, 502);
     }
 
+    await logAiUsage(supabase, { userId, operation: 'creative_concepts', status: 'success' });
     return jsonResponse({ concepts: parsed.concepts }, 200);
   } catch (err) {
-    return jsonResponse({ error: String(err) }, 500);
+    return jsonResponse(sanitizeUnexpectedError(err, 'creative-concepts'), 500);
   }
 });

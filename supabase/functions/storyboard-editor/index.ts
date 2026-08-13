@@ -1,4 +1,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { validateUuid, validateString } from '../_shared/validation.ts';
+import { sanitizeUpstreamError, sanitizeUnexpectedError } from '../_shared/errors.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { logAiUsage } from '../_shared/usageLog.ts';
 
 const DIRECTOR_SYSTEM_ROLE =
   'You are an award-winning commercial film director and creative director specializing in advertising, ' +
@@ -297,8 +301,12 @@ Deno.serve(async (req) => {
   try {
     const { projectId, preset, instruction, creativeDna } = await req.json();
     if (!projectId) return jsonResponse({ error: 'projectId required' }, 400);
+    const projectIdErr = validateUuid(projectId, 'projectId');
+    if (projectIdErr) return jsonResponse({ error: projectIdErr }, 400);
     if (!preset && !instruction) return jsonResponse({ error: 'preset or instruction required' }, 400);
     if (preset && !PRESET_DIRECTIONS[preset]) return jsonResponse({ error: 'unknown preset' }, 400);
+    const instructionErr = validateString(instruction, 'instruction', { maxLength: 4000 });
+    if (instructionErr) return jsonResponse({ error: instructionErr }, 400);
 
     const { data: project, error: projectError } = await supabase
       .from('projects').select('*').eq('id', projectId).single();
@@ -311,6 +319,16 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user || userData.user.id !== project.user_id) {
       return jsonResponse({ error: 'forbidden' }, 403);
+    }
+    const userId = userData.user.id;
+
+    const rateLimit = await checkRateLimit(supabase, userId, 'expensive_ai');
+    if (!rateLimit.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'storyboard_editor', status: 'rate_limited', projectId });
+      return jsonResponse(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', code: 'RATE_LIMITED', retryAfterSeconds: rateLimit.retryAfterSeconds },
+        429,
+      );
     }
 
     const { data: existingCuts, error: cutsError } = await supabase
@@ -384,7 +402,7 @@ Deno.serve(async (req) => {
 
     if (!openaiRes.ok) {
       const errText = await openaiRes.text();
-      return jsonResponse({ error: `openai error: ${errText}` }, 502);
+      return jsonResponse(sanitizeUpstreamError(errText, 'storyboard-editor'), 502);
     }
 
     const openaiJson = await openaiRes.json();
@@ -491,8 +509,9 @@ Deno.serve(async (req) => {
 
     await supabase.from('projects').update({ creative_direction: output.creativeDirection }).eq('id', projectId);
 
+    await logAiUsage(supabase, { userId, operation: 'storyboard_editor', status: 'success', projectId });
     return jsonResponse({ success: true, changes: output.changesSummary }, 200);
   } catch (err) {
-    return jsonResponse({ error: String(err) }, 500);
+    return jsonResponse(sanitizeUnexpectedError(err, 'storyboard-editor'), 500);
   }
 });

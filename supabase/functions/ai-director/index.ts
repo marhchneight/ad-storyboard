@@ -1,4 +1,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { validateString, validateNumber, validateEnum } from '../_shared/validation.ts';
+import { sanitizeUpstreamError, sanitizeUnexpectedError } from '../_shared/errors.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { logAiUsage } from '../_shared/usageLog.ts';
 
 const DIRECTOR_SYSTEM_ROLE =
   'You are an award-winning commercial film director and creative director specializing in advertising, ' +
@@ -312,7 +316,7 @@ async function fetchShotsOnly(userPrompt: string): Promise<ShotsOnlyResult | { e
 
   if (!openaiRes.ok) {
     const errText = await openaiRes.text();
-    return { error: `openai error: ${errText}` };
+    return { error: sanitizeUpstreamError(errText, 'ai-director-shots-only').error };
   }
 
   const openaiJson = await openaiRes.json();
@@ -501,6 +505,25 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'invalid creativeDirection' }, 400);
     }
 
+    const titleErr = validateString(title, 'title', { maxLength: 200 });
+    if (titleErr) return jsonResponse({ error: titleErr }, 400);
+    const freeformErr = validateString(freeformIdea, 'freeformIdea', { maxLength: 10000 });
+    if (freeformErr) return jsonResponse({ error: freeformErr }, 400);
+    const copyTextErr = validateString(copyText, 'copyText', { maxLength: 20000 });
+    if (copyTextErr) return jsonResponse({ error: copyTextErr }, 400);
+    if (sceneCountMode !== undefined) {
+      const modeErr = validateEnum(sceneCountMode, ['manual', 'duration'] as const, 'sceneCountMode');
+      if (modeErr) return jsonResponse({ error: modeErr }, 400);
+    }
+    const sceneCountErr = validateNumber(requestedSceneCount, 'requestedSceneCount', { min: 2, max: 30, integer: true });
+    if (sceneCountErr) return jsonResponse({ error: sceneCountErr }, 400);
+    const durationErr = validateNumber(targetDurationSeconds, 'targetDurationSeconds', { min: 1, max: 600 });
+    if (durationErr) return jsonResponse({ error: durationErr }, 400);
+    if (creativeRisk !== undefined) {
+      const riskErr = validateEnum(creativeRisk, ['safe', 'balanced', 'creative', 'bold'] as const, 'creativeRisk');
+      if (riskErr) return jsonResponse({ error: riskErr }, 400);
+    }
+
     const authHeader = req.headers.get('Authorization') ?? '';
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
     if (!token) return jsonResponse({ error: 'unauthorized' }, 401);
@@ -508,6 +531,15 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user) return jsonResponse({ error: 'unauthorized' }, 401);
     const userId = userData.user.id;
+
+    const rateLimit = await checkRateLimit(supabase, userId, 'expensive_ai');
+    if (!rateLimit.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'ai_director', status: 'rate_limited' });
+      return jsonResponse(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', code: 'RATE_LIMITED', retryAfterSeconds: rateLimit.retryAfterSeconds },
+        429,
+      );
+    }
 
     const treatment = creativeDirection as Treatment | undefined;
 
@@ -583,7 +615,7 @@ Deno.serve(async (req) => {
 
       if (!openaiRes.ok) {
         const errText = await openaiRes.text();
-        return jsonResponse({ error: `openai error: ${errText}` }, 502);
+        return jsonResponse(sanitizeUpstreamError(errText, 'ai-director'), 502);
       }
 
       const openaiJson = await openaiRes.json();
@@ -624,7 +656,7 @@ Deno.serve(async (req) => {
       })
       .select()
       .single();
-    if (projectError) return jsonResponse({ error: projectError.message }, 500);
+    if (projectError) return jsonResponse(sanitizeUnexpectedError(projectError, 'ai-director-project-insert'), 500);
 
     const cutRows = shots
       .slice()
@@ -661,11 +693,13 @@ Deno.serve(async (req) => {
     const { error: cutsError } = await supabase.from('cuts').insert(cutRows);
     if (cutsError) {
       await supabase.from('projects').delete().eq('id', project.id);
-      return jsonResponse({ error: cutsError.message }, 500);
+      await logAiUsage(supabase, { userId, operation: 'ai_director', status: 'failed', projectId: project.id });
+      return jsonResponse(sanitizeUnexpectedError(cutsError, 'ai-director-cuts-insert'), 500);
     }
 
+    await logAiUsage(supabase, { userId, operation: 'ai_director', status: 'success', projectId: project.id });
     return jsonResponse({ projectId: project.id }, 200);
   } catch (err) {
-    return jsonResponse({ error: String(err) }, 500);
+    return jsonResponse(sanitizeUnexpectedError(err, 'ai-director'), 500);
   }
 });

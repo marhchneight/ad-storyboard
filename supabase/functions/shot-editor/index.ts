@@ -1,4 +1,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { validateUuid, validateString } from '../_shared/validation.ts';
+import { sanitizeUpstreamError, sanitizeUnexpectedError } from '../_shared/errors.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { logAiUsage } from '../_shared/usageLog.ts';
 
 const DIRECTOR_SYSTEM_ROLE =
   'You are an award-winning commercial film director. You are revising exactly one shot of an existing ' +
@@ -224,8 +228,12 @@ Deno.serve(async (req) => {
   try {
     const { cutId, action, instruction } = await req.json();
     if (!cutId) return jsonResponse({ error: 'cutId required' }, 400);
+    const cutIdErr = validateUuid(cutId, 'cutId');
+    if (cutIdErr) return jsonResponse({ error: cutIdErr }, 400);
     if (!action && !instruction) return jsonResponse({ error: 'action or instruction required' }, 400);
     if (action && !QUICK_ACTION_INSTRUCTIONS[action]) return jsonResponse({ error: 'unknown action' }, 400);
+    const instructionErr = validateString(instruction, 'instruction', { maxLength: 4000 });
+    if (instructionErr) return jsonResponse({ error: instructionErr }, 400);
 
     const { data: cut, error: cutError } = await supabase.from('cuts').select('*').eq('id', cutId).single();
     if (cutError || !cut) return jsonResponse({ error: 'cut not found' }, 404);
@@ -241,6 +249,16 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user || userData.user.id !== project.user_id) {
       return jsonResponse({ error: 'forbidden' }, 403);
+    }
+    const userId = userData.user.id;
+
+    const rateLimit = await checkRateLimit(supabase, userId, 'lightweight_ai');
+    if (!rateLimit.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'shot_editor', status: 'rate_limited', projectId: project.id, cutId });
+      return jsonResponse(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', code: 'RATE_LIMITED', retryAfterSeconds: rateLimit.retryAfterSeconds },
+        429,
+      );
     }
 
     const editInstruction = action ? QUICK_ACTION_INSTRUCTIONS[action] : `Client note: "${instruction}"`;
@@ -305,7 +323,7 @@ Deno.serve(async (req) => {
 
     if (!openaiRes.ok) {
       const errText = await openaiRes.text();
-      return jsonResponse({ error: `openai error: ${errText}` }, 502);
+      return jsonResponse(sanitizeUpstreamError(errText, 'shot-editor'), 502);
     }
 
     const openaiJson = await openaiRes.json();
@@ -363,10 +381,14 @@ Deno.serve(async (req) => {
       generation_status: 'idle',
     }).eq('id', cutId);
 
-    if (updateError) return jsonResponse({ error: updateError.message }, 500);
+    if (updateError) {
+      await logAiUsage(supabase, { userId, operation: 'shot_editor', status: 'failed', projectId: project.id, cutId });
+      return jsonResponse(sanitizeUnexpectedError(updateError, 'shot-editor-update'), 500);
+    }
 
+    await logAiUsage(supabase, { userId, operation: 'shot_editor', status: 'success', projectId: project.id, cutId });
     return jsonResponse({ success: true }, 200);
   } catch (err) {
-    return jsonResponse({ error: String(err) }, 500);
+    return jsonResponse(sanitizeUnexpectedError(err, 'shot-editor'), 500);
   }
 });

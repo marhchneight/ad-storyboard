@@ -1,4 +1,10 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { validateUuid } from '../_shared/validation.ts';
+import { sanitizeUpstreamError, sanitizeUnexpectedError } from '../_shared/errors.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { checkDailyImageQuota } from '../_shared/quota.ts';
+import { fetchReferenceImageSafely } from '../_shared/urlGuard.ts';
+import { logAiUsage } from '../_shared/usageLog.ts';
 
 const IMAGE_SIZE_BY_ASPECT_RATIO: Record<string, string> = {
   '1:1': '1024x1024',
@@ -200,10 +206,9 @@ async function generateViaReference(prompt: string, size: string, referenceUrls:
   form.append('prompt', prompt);
   form.append('size', size);
   for (let i = 0; i < referenceUrls.length; i++) {
-    const imgRes = await fetch(referenceUrls[i]);
-    if (!imgRes.ok) throw new Error(`failed to fetch reference image ${referenceUrls[i]}`);
-    const blob = await imgRes.blob();
-    form.append('image[]', blob, `reference-${i}.png`);
+    const fetched = await fetchReferenceImageSafely(referenceUrls[i]);
+    if (!fetched.ok) throw new Error(`reference image unusable (${fetched.reason})`);
+    form.append('image[]', fetched.blob, `reference-${i}.png`);
   }
   const openaiRes = await fetch('https://api.openai.com/v1/images/edits', {
     method: 'POST',
@@ -247,6 +252,8 @@ Deno.serve(async (req) => {
   try {
     ({ cutId } = await req.json());
     if (!cutId) return jsonResponse({ error: 'cutId required' }, 400);
+    const cutIdError = validateUuid(cutId, 'cutId');
+    if (cutIdError) return jsonResponse({ error: cutIdError }, 400);
 
     const { data: cut, error: cutError } = await supabase.from('cuts').select('*').eq('id', cutId).single();
     if (cutError || !cut) return jsonResponse({ error: 'cut not found' }, 404);
@@ -263,8 +270,33 @@ Deno.serve(async (req) => {
     if (userError || !userData?.user || userData.user.id !== project.user_id) {
       return jsonResponse({ error: 'forbidden' }, 403);
     }
+    const userId = userData.user.id;
 
-    await supabase.from('cuts').update({ generation_status: 'generating' }).eq('id', cutId);
+    const rateLimit = await checkRateLimit(supabase, userId, 'image_generation');
+    if (!rateLimit.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'generate_image', status: 'rate_limited', projectId: project.id, cutId });
+      return jsonResponse(
+        { error: '이미지 생성 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', code: 'RATE_LIMITED', retryAfterSeconds: rateLimit.retryAfterSeconds },
+        429,
+      );
+    }
+
+    const quota = await checkDailyImageQuota(supabase, userId);
+    if (!quota.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'generate_image', status: 'quota_exceeded', projectId: project.id, cutId });
+      return jsonResponse(
+        { error: '오늘의 이미지 생성 한도를 모두 사용했습니다. 내일 다시 시도해주세요.', code: 'DAILY_QUOTA_EXCEEDED', retryAfterSeconds: quota.retryAfterSeconds },
+        429,
+      );
+    }
+
+    const { data: claimed } = await supabase.rpc('claim_image_generation', { p_cut_id: cutId });
+    if (!claimed) {
+      return jsonResponse(
+        { error: '이미 이미지를 생성하고 있어요. 잠시만 기다려주세요.', code: 'GENERATION_IN_PROGRESS' },
+        409,
+      );
+    }
 
     const visualBible: VisualBible = (project.visual_bible as VisualBible) ?? {};
     const entityRefs: EntityRefs = (cut.entity_refs as EntityRefs) ?? {};
@@ -284,14 +316,16 @@ Deno.serve(async (req) => {
     } catch (primaryErr) {
       if (referenceUrls.length === 0) {
         await supabase.from('cuts').update({ generation_status: 'failed' }).eq('id', cutId);
-        return jsonResponse({ error: String(primaryErr) }, 502);
+        await logAiUsage(supabase, { userId, operation: 'generate_image', status: 'failed', projectId: project.id, cutId });
+        return jsonResponse(sanitizeUpstreamError(primaryErr, 'generate-image'), 502);
       }
       console.error('reference-based generation failed, falling back to text-only', String(primaryErr));
       try {
         b64 = await generateViaText(prompt, size);
       } catch (fallbackErr) {
         await supabase.from('cuts').update({ generation_status: 'failed' }).eq('id', cutId);
-        return jsonResponse({ error: String(fallbackErr) }, 502);
+        await logAiUsage(supabase, { userId, operation: 'generate_image', status: 'failed', projectId: project.id, cutId });
+        return jsonResponse(sanitizeUpstreamError(fallbackErr, 'generate-image'), 502);
       }
     }
 
@@ -303,7 +337,8 @@ Deno.serve(async (req) => {
       .upload(path, bytes, { contentType: 'image/png', upsert: true });
     if (uploadError) {
       await supabase.from('cuts').update({ generation_status: 'failed' }).eq('id', cutId);
-      return jsonResponse({ error: uploadError.message }, 500);
+      await logAiUsage(supabase, { userId, operation: 'generate_image', status: 'failed', projectId: project.id, cutId });
+      return jsonResponse(sanitizeUnexpectedError(uploadError, 'generate-image-upload'), 500);
     }
 
     const { data: publicUrlData } = supabase.storage.from('storyboard-images').getPublicUrl(path);
@@ -317,6 +352,7 @@ Deno.serve(async (req) => {
       await supabase.from('projects').update({ visual_bible: updatedBible }).eq('id', project.id);
     }
 
+    await logAiUsage(supabase, { userId, operation: 'generate_image', status: 'success', projectId: project.id, cutId });
     return jsonResponse({ imageUrl }, 200);
   } catch (err) {
     if (cutId) {
@@ -326,6 +362,6 @@ Deno.serve(async (req) => {
         // Swallow cleanup errors — reporting the original error takes priority.
       }
     }
-    return jsonResponse({ error: String(err) }, 500);
+    return jsonResponse(sanitizeUnexpectedError(err, 'generate-image'), 500);
   }
 });

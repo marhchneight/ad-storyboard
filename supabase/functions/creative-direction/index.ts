@@ -1,4 +1,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { validateString, validateNumber, validateEnum } from '../_shared/validation.ts';
+import { sanitizeUpstreamError, sanitizeUnexpectedError } from '../_shared/errors.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { logAiUsage } from '../_shared/usageLog.ts';
 
 const SYSTEM_ROLE =
   'You are an award-winning commercial film director. A client brings you a rough idea for an ad. Your job ' +
@@ -162,12 +166,40 @@ Deno.serve(async (req) => {
     if (!token) return jsonResponse({ error: 'unauthorized' }, 401);
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user) return jsonResponse({ error: 'unauthorized' }, 401);
+    const userId = userData.user.id;
+
+    const rateLimit = await checkRateLimit(supabase, userId, 'lightweight_ai');
+    if (!rateLimit.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'creative_direction', status: 'rate_limited' });
+      return jsonResponse(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', code: 'RATE_LIMITED', retryAfterSeconds: rateLimit.retryAfterSeconds },
+        429,
+      );
+    }
 
     const {
       mode, freeformIdea, brief, dna, previousTreatment, instruction,
       sceneCountMode, requestedSceneCount, targetDurationSeconds,
     } = await req.json();
     const resolvedMode = mode === 'revise' || mode === 'regenerate' ? mode : 'generate';
+
+    if (mode !== undefined) {
+      const modeErr = validateEnum(mode, ['generate', 'regenerate', 'revise'] as const, 'mode');
+      if (modeErr) return jsonResponse({ error: modeErr }, 400);
+    }
+    const freeformErr = validateString(freeformIdea, 'freeformIdea', { maxLength: 10000 });
+    if (freeformErr) return jsonResponse({ error: freeformErr }, 400);
+    const instructionErr = validateString(instruction, 'instruction', { maxLength: 4000 });
+    if (instructionErr) return jsonResponse({ error: instructionErr }, 400);
+    if (sceneCountMode !== undefined) {
+      const modeErr = validateEnum(sceneCountMode, ['manual', 'duration'] as const, 'sceneCountMode');
+      if (modeErr) return jsonResponse({ error: modeErr }, 400);
+    }
+    const sceneCountErr = validateNumber(requestedSceneCount, 'requestedSceneCount', { min: 2, max: 30, integer: true });
+    if (sceneCountErr) return jsonResponse({ error: sceneCountErr }, 400);
+    const durationErr = validateNumber(targetDurationSeconds, 'targetDurationSeconds', { min: 1, max: 600 });
+    if (durationErr) return jsonResponse({ error: durationErr }, 400);
+
     const sceneCountNote = buildSceneCountNote(sceneCountMode, requestedSceneCount, targetDurationSeconds);
 
     let userPrompt: string;
@@ -215,7 +247,7 @@ Deno.serve(async (req) => {
 
     if (!openaiRes.ok) {
       const errText = await openaiRes.text();
-      return jsonResponse({ error: `openai error: ${errText}` }, 502);
+      return jsonResponse(sanitizeUpstreamError(errText, 'creative-direction'), 502);
     }
 
     const openaiJson = await openaiRes.json();
@@ -235,8 +267,9 @@ Deno.serve(async (req) => {
 
     const treatment = applySceneCountOverride(parsed, sceneCountMode, requestedSceneCount, targetDurationSeconds);
 
+    await logAiUsage(supabase, { userId, operation: 'creative_direction', status: 'success' });
     return jsonResponse({ treatment }, 200);
   } catch (err) {
-    return jsonResponse({ error: String(err) }, 500);
+    return jsonResponse(sanitizeUnexpectedError(err, 'creative-direction'), 500);
   }
 });

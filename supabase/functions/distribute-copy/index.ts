@@ -1,4 +1,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { validateUuid, validateString } from '../_shared/validation.ts';
+import { sanitizeUpstreamError, sanitizeUnexpectedError } from '../_shared/errors.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { logAiUsage } from '../_shared/usageLog.ts';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -26,9 +30,13 @@ Deno.serve(async (req) => {
   try {
     const { projectId, copyText } = await req.json();
     if (!projectId) return jsonResponse({ error: 'projectId required' }, 400);
+    const projectIdErr = validateUuid(projectId, 'projectId');
+    if (projectIdErr) return jsonResponse({ error: projectIdErr }, 400);
     if (!copyText || typeof copyText !== 'string' || copyText.trim().length === 0) {
       return jsonResponse({ error: 'copyText required' }, 400);
     }
+    const copyTextErr = validateString(copyText, 'copyText', { maxLength: 20000 });
+    if (copyTextErr) return jsonResponse({ error: copyTextErr }, 400);
 
     const { data: project, error: projectError } = await supabase
       .from('projects').select('*').eq('id', projectId).single();
@@ -41,6 +49,16 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user || userData.user.id !== project.user_id) {
       return jsonResponse({ error: 'forbidden' }, 403);
+    }
+    const userId = userData.user.id;
+
+    const rateLimit = await checkRateLimit(supabase, userId, 'lightweight_ai');
+    if (!rateLimit.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'distribute_copy', status: 'rate_limited', projectId });
+      return jsonResponse(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', code: 'RATE_LIMITED', retryAfterSeconds: rateLimit.retryAfterSeconds },
+        429,
+      );
     }
 
     const { data: cuts, error: cutsError } = await supabase
@@ -72,7 +90,7 @@ Deno.serve(async (req) => {
 
     if (!openaiRes.ok) {
       const errText = await openaiRes.text();
-      return jsonResponse({ error: `openai error: ${errText}` }, 502);
+      return jsonResponse(sanitizeUpstreamError(errText, 'distribute-copy'), 502);
     }
 
     const openaiJson = await openaiRes.json();
@@ -94,8 +112,9 @@ Deno.serve(async (req) => {
       await supabase.from('cuts').update({ dialogue: String(dialogues[i]) }).eq('id', cuts[i].id);
     }
 
+    await logAiUsage(supabase, { userId, operation: 'distribute_copy', status: 'success', projectId });
     return jsonResponse({ success: true, count: cuts.length }, 200);
   } catch (err) {
-    return jsonResponse({ error: String(err) }, 500);
+    return jsonResponse(sanitizeUnexpectedError(err, 'distribute-copy'), 500);
   }
 });

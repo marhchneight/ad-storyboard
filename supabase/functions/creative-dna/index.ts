@@ -1,4 +1,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { validateString, validateUrl, validateUuid } from '../_shared/validation.ts';
+import { sanitizeUpstreamError, sanitizeUnexpectedError } from '../_shared/errors.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { logAiUsage } from '../_shared/usageLog.ts';
 
 const SYSTEM_ROLE =
   'You are an award-winning commercial film director and cinematographer with a trained eye for visual ' +
@@ -162,6 +166,25 @@ Deno.serve(async (req) => {
 
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user) return jsonResponse({ error: 'unauthorized' }, 401);
+    const userId = userData.user.id;
+
+    const rateLimit = await checkRateLimit(supabase, userId, 'expensive_ai');
+    if (!rateLimit.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'creative_dna', status: 'rate_limited', projectId: typeof projectId === 'string' ? projectId : undefined });
+      return jsonResponse(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', code: 'RATE_LIMITED', retryAfterSeconds: rateLimit.retryAfterSeconds },
+        429,
+      );
+    }
+
+    if (projectId !== undefined) {
+      const projectIdErr = validateUuid(projectId, 'projectId');
+      if (projectIdErr) return jsonResponse({ error: projectIdErr }, 400);
+    }
+    const imageUrlErr = validateUrl(imageUrl, 'imageUrl', { maxLength: 2048 });
+    if (imageUrlErr) return jsonResponse({ error: imageUrlErr }, 400);
+    const textDescriptionErr = validateString(textDescription, 'textDescription', { maxLength: 10000 });
+    if (textDescriptionErr) return jsonResponse({ error: textDescriptionErr }, 400);
 
     let project: { id: string; user_id: string; creative_dna: DnaOutput | null } | null = null;
     if (projectId) {
@@ -207,7 +230,7 @@ Deno.serve(async (req) => {
           ],
         );
       } catch (err) {
-        return jsonResponse({ error: String(err) }, 502);
+        return jsonResponse(sanitizeUpstreamError(err, 'creative-dna-localize'), 502);
       }
 
       let parsedLocalize: unknown;
@@ -231,6 +254,7 @@ Deno.serve(async (req) => {
       }
 
       await supabase.from('projects').update({ creative_dna: merged }).eq('id', projectId);
+      await logAiUsage(supabase, { userId, operation: 'creative_dna', status: 'success', projectId });
       return jsonResponse({ dna: merged }, 200);
     }
 
@@ -252,7 +276,7 @@ Deno.serve(async (req) => {
     try {
       content = await callOpenAiContent(`${SYSTEM_ROLE} ${STYLE_CONTENT_SEPARATION_NOTE}`, userContent);
     } catch (err) {
-      return jsonResponse({ error: String(err) }, 502);
+      return jsonResponse(sanitizeUpstreamError(err, 'creative-dna'), 502);
     }
 
     let parsed: unknown;
@@ -272,8 +296,9 @@ Deno.serve(async (req) => {
       await supabase.from('projects').update({ creative_dna: dna }).eq('id', projectId);
     }
 
+    await logAiUsage(supabase, { userId, operation: 'creative_dna', status: 'success', projectId: typeof projectId === 'string' ? projectId : undefined });
     return jsonResponse({ dna }, 200);
   } catch (err) {
-    return jsonResponse({ error: String(err) }, 500);
+    return jsonResponse(sanitizeUnexpectedError(err, 'creative-dna'), 500);
   }
 });

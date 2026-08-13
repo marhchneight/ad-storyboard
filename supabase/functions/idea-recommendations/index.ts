@@ -1,4 +1,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { logAiUsage } from '../_shared/usageLog.ts';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -273,9 +275,21 @@ Deno.serve(async (req) => {
     if (!token) return jsonResponse({ error: 'unauthorized' }, 401);
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user) return jsonResponse({ error: 'unauthorized' }, 401);
+    const userId = userData.user.id;
+
+    const rateLimit = await checkRateLimit(supabase, userId, 'lightweight_ai');
+    if (!rateLimit.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'idea_recommendations', status: 'rate_limited' });
+      return jsonResponse(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', code: 'RATE_LIMITED', retryAfterSeconds: rateLimit.retryAfterSeconds },
+        429,
+      );
+    }
 
     const body = await req.json().catch(() => ({}));
-    const avoid = Array.isArray(body.avoid) ? body.avoid.filter((a: unknown) => typeof a === 'string').slice(0, 10) : [];
+    const avoid = Array.isArray(body.avoid)
+      ? body.avoid.filter((a: unknown) => typeof a === 'string' && a.length <= 300).slice(0, 10)
+      : [];
 
     let source: 'ai' | 'fallback' = 'ai';
     let examples: CreativeExample[];
@@ -287,6 +301,7 @@ Deno.serve(async (req) => {
       examples = pickFallback(avoid);
     }
 
+    await logAiUsage(supabase, { userId, operation: 'idea_recommendations', status: source === 'ai' ? 'success' : 'failed' });
     return jsonResponse({ examples, source }, 200);
   } catch (err) {
     // Even a totally unexpected failure (e.g. malformed request body) still

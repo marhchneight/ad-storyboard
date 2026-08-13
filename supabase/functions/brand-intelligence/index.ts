@@ -1,4 +1,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { validateString } from '../_shared/validation.ts';
+import { sanitizeUpstreamError, sanitizeUnexpectedError } from '../_shared/errors.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { logAiUsage } from '../_shared/usageLog.ts';
 
 const SYSTEM_ROLE =
   'You are a senior brand strategist and category analyst preparing a grounded creative brief for an ' +
@@ -176,11 +180,29 @@ Deno.serve(async (req) => {
     if (!token) return jsonResponse({ error: 'unauthorized' }, 401);
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user) return jsonResponse({ error: 'unauthorized' }, 401);
+    const userId = userData.user.id;
+
+    const rateLimit = await checkRateLimit(supabase, userId, 'lightweight_ai');
+    if (!rateLimit.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'brand_intelligence', status: 'rate_limited' });
+      return jsonResponse(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', code: 'RATE_LIMITED', retryAfterSeconds: rateLimit.retryAfterSeconds },
+        429,
+      );
+    }
 
     const { product, mood, platform, targetAudience } = await req.json();
     if (!product || typeof product !== 'string' || !product.trim()) {
       return jsonResponse({ error: 'product required' }, 400);
     }
+    const productErr = validateString(product, 'product', { maxLength: 500 });
+    if (productErr) return jsonResponse({ error: productErr }, 400);
+    const moodErr = validateString(mood, 'mood', { maxLength: 500 });
+    if (moodErr) return jsonResponse({ error: moodErr }, 400);
+    const platformErr = validateString(platform, 'platform', { maxLength: 500 });
+    if (platformErr) return jsonResponse({ error: platformErr }, 400);
+    const targetAudienceErr = validateString(targetAudience, 'targetAudience', { maxLength: 500 });
+    if (targetAudienceErr) return jsonResponse({ error: targetAudienceErr }, 400);
 
     const signals = await fetchExternalBrandSignals(product.trim());
     const searchNote = signals.available
@@ -216,7 +238,7 @@ Deno.serve(async (req) => {
 
     if (!openaiRes.ok) {
       const errText = await openaiRes.text();
-      return jsonResponse({ error: `openai error: ${errText}` }, 502);
+      return jsonResponse(sanitizeUpstreamError(errText, 'brand-intelligence'), 502);
     }
 
     const openaiJson = await openaiRes.json();
@@ -234,8 +256,9 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'AI가 올바른 형식의 브랜드 분석을 반환하지 않았습니다. 다시 시도해주세요.' }, 502);
     }
 
+    await logAiUsage(supabase, { userId, operation: 'brand_intelligence', status: 'success' });
     return jsonResponse({ analysis: parsed }, 200);
   } catch (err) {
-    return jsonResponse({ error: String(err) }, 500);
+    return jsonResponse(sanitizeUnexpectedError(err, 'brand-intelligence'), 500);
   }
 });

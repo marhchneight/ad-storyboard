@@ -1,4 +1,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { validateString } from '../_shared/validation.ts';
+import { sanitizeUpstreamError, sanitizeUnexpectedError } from '../_shared/errors.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
+import { logAiUsage } from '../_shared/usageLog.ts';
 
 const SYSTEM_ROLE =
   'You are an award-winning commercial film director running a "Director\'s Room" pitch session. You are NOT ' +
@@ -166,11 +170,23 @@ Deno.serve(async (req) => {
     if (!token) return jsonResponse({ error: 'unauthorized' }, 401);
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user) return jsonResponse({ error: 'unauthorized' }, 401);
+    const userId = userData.user.id;
+
+    const rateLimit = await checkRateLimit(supabase, userId, 'expensive_ai');
+    if (!rateLimit.allowed) {
+      await logAiUsage(supabase, { userId, operation: 'directors_room', status: 'rate_limited' });
+      return jsonResponse(
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', code: 'RATE_LIMITED', retryAfterSeconds: rateLimit.retryAfterSeconds },
+        429,
+      );
+    }
 
     const { freeformIdea, brief, dna, treatment, creativeRisk } = await req.json();
     if (!treatment || typeof treatment !== 'object') {
       return jsonResponse({ error: 'treatment required' }, 400);
     }
+    const freeformErr = validateString(freeformIdea, 'freeformIdea', { maxLength: 10000 });
+    if (freeformErr) return jsonResponse({ error: freeformErr }, 400);
     const resolvedRisk = RISK_LEVELS.has(creativeRisk) ? creativeRisk : 'creative';
 
     const hasDna = dna && typeof dna === 'object';
@@ -215,7 +231,7 @@ Deno.serve(async (req) => {
 
     if (!openaiRes.ok) {
       const errText = await openaiRes.text();
-      return jsonResponse({ error: `openai error: ${errText}` }, 502);
+      return jsonResponse(sanitizeUpstreamError(errText, 'directors-room'), 502);
     }
 
     const openaiJson = await openaiRes.json();
@@ -264,8 +280,9 @@ Deno.serve(async (req) => {
       };
     });
 
+    await logAiUsage(supabase, { userId, operation: 'directors_room', status: 'success' });
     return jsonResponse({ options }, 200);
   } catch (err) {
-    return jsonResponse({ error: String(err) }, 500);
+    return jsonResponse(sanitizeUnexpectedError(err, 'directors-room'), 500);
   }
 });
