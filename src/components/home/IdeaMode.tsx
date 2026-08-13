@@ -1,14 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { generateCreativeDirection, type SceneCountParams } from '../../lib/creativeDirectionApi';
+import { fetchCreativeExamples } from '../../lib/ideaRecommendationsApi';
 import { extractTextFromFile } from '../../lib/copyFileParser';
-import type { CreativeBrief, CreativeTreatment } from '../../types';
-
-const EXAMPLE_PROMPTS = [
-  '15초짜리 여름 향수 광고. 새벽 서울의 차갑고 몽환적인 분위기.',
-  '새로운 러닝화를 위한 거친 TikTok 광고, Gen-Z 타깃.',
-  '제품을 마지막에만 보여주는 커피 광고.',
-  '사람 없이 만드는 자동차 광고.',
-];
+import type { CreativeBrief, CreativeExample, CreativeTreatment } from '../../types';
 
 const LOADING_MESSAGES = [
   '아이디어를 읽는 중', '크리에이티브 앵글을 찾는 중', '비주얼 언어를 정하는 중', '트리트먼트를 구성하는 중',
@@ -39,6 +33,29 @@ export default function IdeaMode({
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const [copyError, setCopyError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+
+  const [examples, setExamples] = useState<CreativeExample[]>([]);
+  const [examplesLoading, setExamplesLoading] = useState(true);
+  const [examplesError, setExamplesError] = useState<string | null>(null);
+
+  async function loadExamples(avoid: string[] = []) {
+    setExamplesLoading(true);
+    setExamplesError(null);
+    try {
+      const next = await fetchCreativeExamples(avoid);
+      setExamples(next);
+    } catch (err) {
+      // Keep whatever examples were already showing rather than clearing
+      // the section on a refresh failure.
+      setExamplesError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExamplesLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadExamples();
+  }, []);
 
   useEffect(() => {
     if (!busy) return;
@@ -122,14 +139,28 @@ export default function IdeaMode({
         />
       </div>
       <div className="field">
-        <span className="field-label">예시로 시작하기</span>
-        <div className="hero-examples">
-          {EXAMPLE_PROMPTS.map((ex) => (
-            <button type="button" key={ex} className="hero-example-chip" onClick={() => setIdea(ex)} disabled={busy}>
-              {ex}
-            </button>
-          ))}
+        <div className="idea-examples-header">
+          <span className="field-label">요즘 이런 광고는 어때요?</span>
+          <button
+            type="button"
+            className="idea-examples-refresh"
+            onClick={() => loadExamples(examples.map((ex) => ex.text))}
+            disabled={busy || examplesLoading}
+          >
+            ↻ 새로 추천
+          </button>
         </div>
+        {examples.length > 0 && (
+          <div className="hero-examples">
+            {examples.map((ex) => (
+              <button type="button" key={ex.id} className="hero-example-chip" onClick={() => setIdea(ex.text)} disabled={busy}>
+                {ex.text}
+              </button>
+            ))}
+          </div>
+        )}
+        {examplesLoading && <p className="idea-examples-status">새로운 아이디어 찾는 중...</p>}
+        {examplesError && !examplesLoading && <p className="error">{examplesError}</p>}
       </div>
       {styleField}
       {aspectRatioField}

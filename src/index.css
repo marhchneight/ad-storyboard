@@ -1279,6 +1279,40 @@ a.btn-primary {
   min-height: 96px;
 }
 
+.idea-examples-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.idea-examples-header .field-label {
+  margin: 0;
+}
+
+.idea-examples-refresh {
+  background: none;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.idea-examples-refresh:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.idea-examples-status {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--text-secondary);
+  margin: 8px 0 0;
+}
+
 .hero-examples {
   display: flex;
   flex-wrap: wrap;

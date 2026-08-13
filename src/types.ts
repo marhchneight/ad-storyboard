@@ -6,6 +6,17 @@ export type Duration = '6s' | '15s' | '30s' | '60s' | 'Custom';
 export type SceneCountMode = 'manual' | 'duration';
 export type TargetDurationSeconds = 15 | 30 | 60;
 
+/** A trend-aware, storyboard-ready ad idea suggestion shown as a clickable chip. */
+export interface CreativeExample {
+  id: string;
+  text: string;
+  /** Free-form creative-direction label (e.g. "숏폼/SNS형") — not shown in the UI today. */
+  category?: string;
+  /** Short tags naming which trend signal(s) this idea draws on — reserved for a future "why this idea" surface. */
+  trendSignals?: string[];
+  market?: 'KR' | 'GLOBAL' | 'MIXED';
+}
+
 export interface CreativeBrief {
   product?: string;
   objective?: string;
