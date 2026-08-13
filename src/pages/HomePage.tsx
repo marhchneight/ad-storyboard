@@ -213,7 +213,7 @@ export default function HomePage() {
   return (
     <div className="page-shell home-shell">
       <div className="page-header home-header">
-        <p className="eyebrow">Ad Storyboard Studio</p>
+        <p className="eyebrow">렛츠기니</p>
         <div className="page-header-actions">
           <Link to="/projects" className="btn-text">프로젝트</Link>
           <button className="btn-text" onClick={() => signOut()}>로그아웃</button>

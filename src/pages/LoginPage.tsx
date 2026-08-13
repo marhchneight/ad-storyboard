@@ -55,7 +55,7 @@ export default function LoginPage() {
         <ThemeToggle />
       </div>
       <div className="auth-card">
-        <p className="eyebrow">Ad Storyboard Studio</p>
+        <p className="eyebrow">Let's Guine</p>
         <h1>{welcomeTitle}</h1>
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="field">
