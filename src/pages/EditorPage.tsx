@@ -312,13 +312,6 @@ export default function EditorPage() {
   const batchPercent = imageGenProgress && imageGenProgress.total > 0
     ? Math.round((batchProcessed / imageGenProgress.total) * 100)
     : 0;
-  const batchStatusText = imageGenProgress
-    ? imageGenProgress.isGenerating
-      ? `이미지 생성 중 ${batchProcessed} / ${imageGenProgress.total} · ${batchPercent}%`
-      : imageGenProgress.failed > 0
-        ? `${imageGenProgress.total}개 중 ${imageGenProgress.completed}개 완료 · ${imageGenProgress.failed}개 실패`
-        : `${imageGenProgress.total} / ${imageGenProgress.total} 이미지 생성 완료`
-    : '';
 
   const dnaAppliedCount = cuts.filter((c) => c.applied_creative_dna.length > 0).length;
   const firstDnaAppliedCutId = cuts.find((c) => c.applied_creative_dna.length > 0)?.id ?? null;
@@ -398,7 +391,7 @@ export default function EditorPage() {
       <div className="storyboard-section-header">
         <h2 className="storyboard-section-title">콘티</h2>
         <div className="storyboard-section-actions">
-          <button type="button" className="btn-secondary" onClick={handleGenerateAll}
+          <button type="button" className="btn-accent" onClick={handleGenerateAll}
             disabled={batchGenerating || pendingImageCount === 0}>
             {generateAllLabel}
           </button>
@@ -407,7 +400,15 @@ export default function EditorPage() {
               <div className="batch-progress-bar-track">
                 <div className="batch-progress-bar-fill" style={{ width: `${batchPercent}%` }} />
               </div>
-              <span className="batch-progress-label">{batchStatusText}</span>
+              <span className="batch-progress-label">
+                {imageGenProgress.isGenerating ? (
+                  <>이미지 생성 중 {batchProcessed} / {imageGenProgress.total} · <span className="batch-progress-percent">{batchPercent}%</span></>
+                ) : imageGenProgress.failed > 0 ? (
+                  <>{imageGenProgress.total}개 중 {imageGenProgress.completed}개 완료 · {imageGenProgress.failed}개 실패</>
+                ) : (
+                  <><span className="batch-progress-check">✓</span> {imageGenProgress.total}개 이미지 생성 완료</>
+                )}
+              </span>
             </div>
           )}
         </div>

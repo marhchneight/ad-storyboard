@@ -25,6 +25,7 @@ export default function SortableCutCard({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    boxShadow: isDragging ? 'inset 0 0 0 2px var(--accent)' : undefined,
   };
 
   return (

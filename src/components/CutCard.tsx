@@ -88,8 +88,10 @@ export default function CutCard({ cut, index, onUpdate, onGenerate, onRemove, on
         {cut.image_url ? (
           <img src={cut.image_url} alt={`컷 ${index + 1}`} className="cut-thumb" />
         ) : (
-          <div className="cut-thumb cut-thumb-placeholder">
-            {cut.generation_status === 'generating' ? '생성 중...' : '이미지 없음'}
+          <div className={`cut-thumb cut-thumb-placeholder${cut.generation_status === 'generating' ? ' is-generating' : ''}`}>
+            {cut.generation_status === 'generating'
+              ? <><span className="cut-thumb-spinner" aria-hidden="true" />생성 중...</>
+              : '이미지 없음'}
           </div>
         )}
         {cut.image_url && (

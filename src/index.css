@@ -19,6 +19,16 @@
   --gp-ink: #2c2b27;
   --card-bg: rgba(255, 255, 255, 0.88);
 
+  /* Brand accent — used only for primary AI CTA / generation progress /
+     active-selection states, never as a general recolor. Same hue in both
+     themes (--mint is the same token by another name); soft/border shift
+     per-theme below so it never looks like a bright sticker on dark UI. */
+  --accent: var(--mint);
+  --accent-hover: #3FA9A1;
+  --accent-soft: #EAF7F5;
+  --accent-border: #A7DDD8;
+  --accent-on: #111111;
+
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', Arial, sans-serif;
   line-height: 1.6;
   font-weight: 400;
@@ -53,6 +63,15 @@
   --gp-secondary: #5ecdc4;
   --gp-ink: #20211f;
   --card-bg: rgba(15, 15, 15, 0.86);
+
+  /* Accent hue itself stays #4cbbb2 (via --mint); only the surrounding
+     soft/border tints change so they read as dark-teal, not a pastel
+     sticker pasted onto a dark background. */
+  --accent: var(--mint);
+  --accent-hover: #5ECDC4;
+  --accent-soft: #16302C;
+  --accent-border: #2F5F58;
+  --accent-on: #111111;
 
   color-scheme: dark;
 }
@@ -228,7 +247,7 @@ p {
 .batch-progress-bar-fill {
   height: 100%;
   border-radius: 999px;
-  background-color: var(--mint);
+  background-color: var(--accent);
   transition: width 250ms ease;
 }
 
@@ -236,6 +255,12 @@ p {
   font-size: 0.78rem;
   color: var(--text-secondary);
   white-space: nowrap;
+}
+
+.batch-progress-percent,
+.batch-progress-check {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .back-link {
@@ -553,7 +578,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -574,6 +599,24 @@ a.btn-primary {
 
 .btn-block {
   width: 100%;
+}
+
+/* The one AI/generation primary CTA — see EditorPage's "전체 이미지 생성"
+   button. Not a general-purpose variant; other buttons stay neutral. */
+.btn-accent,
+a.btn-accent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--accent);
+  color: var(--accent-on);
+  border-color: var(--accent);
+  text-decoration: none;
+}
+
+.btn-accent:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .btn-secondary {
@@ -743,12 +786,37 @@ a.btn-primary {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   color: var(--text-tertiary);
   background-color: var(--surface-muted);
   border: 1px dashed var(--border);
   border-radius: 12px;
   text-align: center;
   font-size: 0.8rem;
+}
+
+.cut-thumb-placeholder.is-generating {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.cut-thumb-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent-border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: cut-thumb-spin 700ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cut-thumb-spinner {
+    animation: none;
+  }
+}
+
+@keyframes cut-thumb-spin {
+  to { transform: rotate(360deg); }
 }
 
 .cut-view-large-btn,
@@ -799,7 +867,7 @@ a.btn-primary {
 }
 
 .director-note {
-  border-left: 3px solid var(--ink);
+  border-left: 3px solid var(--accent);
 }
 
 /* Shot details disclosure */
@@ -867,6 +935,14 @@ a.btn-primary {
 
 .preset-btn {
   border-color: var(--ink);
+}
+
+/* Applied only while this specific preset's AI request is in flight —
+   not a persistent "selected mode" (presets are one-shot actions). */
+.preset-btn-active {
+  background-color: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .ask-director-form {

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { DIRECTOR_PRESETS, type DirectorPreset } from '../../lib/directorApi';
 
 interface Props {
@@ -19,13 +20,28 @@ export default function DirectorControls({
   directing, onApplyPreset, directorInstruction, onDirectorInstructionChange, onAskDirector, lastChanges,
   onMakeItCrazy, rouletteConstraint, onOpenRoulette, onShuffleRoulette, onApplyRoulette, onCancelRoulette,
 }: Props) {
+  // Visual-only "currently applying" indicator (not a persistent selection —
+  // presets are one-shot actions, no mode is actually "chosen" server-side).
+  // Cleared whenever the in-flight AI request finishes.
+  const [activePresetId, setActivePresetId] = useState<DirectorPreset | null>(null);
+
+  useEffect(() => {
+    if (!directing) setActivePresetId(null);
+  }, [directing]);
+
+  function handlePresetClick(preset: DirectorPreset) {
+    setActivePresetId(preset);
+    onApplyPreset(preset);
+  }
+
   return (
     <div className="card prompt-card director-controls">
       <span className="field-label">Director Controls</span>
       <div className="preset-row">
         {DIRECTOR_PRESETS.map((preset) => (
-          <button key={preset.id} type="button" className="btn-secondary btn-small preset-btn"
-            onClick={() => onApplyPreset(preset.id)} disabled={directing}
+          <button key={preset.id} type="button"
+            className={`btn-secondary btn-small preset-btn${activePresetId === preset.id ? ' preset-btn-active' : ''}`}
+            onClick={() => handlePresetClick(preset.id)} disabled={directing}
             title={preset.description}>
             {preset.label}
           </button>
