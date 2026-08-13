@@ -1,152 +1,286 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 export type GuineaPigPhase = 'walking' | 'pausing' | 'sniffing';
-
-// 0 = bottom edge, 1 = right edge, 2 = top edge, 3 = left edge.
-export type Edge = 0 | 1 | 2 | 3;
+export type Facing = 1 | -1;
 
 export interface Poop {
   id: number;
-  edge: Edge;
-  along: number;
+  // Fixed viewport-pixel coordinates, computed once at click time from the
+  // guinea pig's actual bounding box + facing — never touched again, even
+  // as the guinea pig keeps roaming.
+  x: number;
+  y: number;
 }
 
-export interface GuineaPigState {
-  perimeterT: number; // 0..4 — edge = floor(t), along = t - edge
-  direction: 1 | -1;
+export interface GuineaPigMotion {
+  guineaPigRef: RefObject<HTMLDivElement | null>;
   phase: GuineaPigPhase;
   earTwitch: boolean;
-}
-
-export interface GuineaPigMotion extends GuineaPigState {
   poops: Poop[];
   triggerPoop: () => void;
 }
 
-const START_T = 0.15;
-// How far "behind" the guinea pig (opposite its direction of travel) a
-// click-triggered poop lands, in perimeterT units.
-const POOP_BEHIND_OFFSET = 0.035;
+interface Size {
+  w: number;
+  h: number;
+}
+
+interface Bounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+interface Rect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+const DESKTOP_SIZE: Size = { w: 64, h: 40 };
+const MOBILE_SIZE: Size = { w: 44, h: 28 };
+const MOBILE_BREAKPOINT = 640;
+const PADDING = 24;
+const MOBILE_PADDING = 16;
+const CARD_MARGIN = 32;
+const TOGGLE_MARGIN = 16;
+const ARRIVE_THRESHOLD = 6;
+const BASE_SPEED = 46; // px/s
+const EASE_DISTANCE = 140; // px — movement eases down as it nears the target
+const REACTION_MS = 450; // brief movement pause after a poop click
+
+// Local sprite anchors as a fraction of (width, height), already expressed
+// in on-screen terms per facing (the sprite mirrors via scaleX, and these
+// two fractions are already mirror images of each other) — the butt sits
+// low and toward the side opposite the head/nose.
+const BUTT_ANCHOR: Record<Facing, { x: number; y: number }> = {
+  1: { x: 0.08, y: 0.75 }, // facing right: head right, butt left
+  [-1]: { x: 0.92, y: 0.75 }, // facing left: head left, butt right
+};
 
 function rand(min: number, max: number) {
   return min + Math.random() * (max - min);
 }
 
-function normalizeT(t: number) {
-  const m = t % 4;
-  return m < 0 ? m + 4 : m;
+function getSize(): Size {
+  return window.innerWidth <= MOBILE_BREAKPOINT ? MOBILE_SIZE : DESKTOP_SIZE;
 }
 
-interface TickRefs {
-  walkTicksLeft: { current: number };
+function getPadding(): number {
+  return window.innerWidth <= MOBILE_BREAKPOINT ? MOBILE_PADDING : PADDING;
 }
 
-function newWalkBurstTicks() {
-  // 3-8s of ambient walking, ticked at ~750ms each.
-  return Math.max(1, Math.round(rand(3000, 8000) / 750));
+function getBounds(size: Size): Bounds {
+  const padding = getPadding();
+  return {
+    minX: padding,
+    maxX: Math.max(padding, window.innerWidth - size.w - padding),
+    minY: padding,
+    maxY: Math.max(padding, window.innerHeight - size.h - padding),
+  };
 }
 
-function pickNext(prev: GuineaPigState, refs: TickRefs): { state: GuineaPigState; delay: number } {
-  switch (prev.phase) {
-    case 'walking': {
-      const step = rand(0.016, 0.03) * prev.direction;
-      const perimeterT = normalizeT(prev.perimeterT + step);
-      refs.walkTicksLeft.current -= 1;
-      if (refs.walkTicksLeft.current > 0) {
-        return { state: { ...prev, perimeterT }, delay: rand(600, 900) };
-      }
-      return { state: { ...prev, perimeterT, phase: 'pausing' }, delay: rand(1000, 3000) };
-    }
-    case 'pausing': {
-      const roll = Math.random();
-      if (roll < 0.5) {
-        return { state: { ...prev, phase: 'sniffing' }, delay: rand(550, 900) };
-      }
-      let direction = prev.direction;
-      if (Math.random() < 0.3) direction = direction === 1 ? -1 : 1;
-      refs.walkTicksLeft.current = newWalkBurstTicks();
-      return { state: { ...prev, phase: 'walking', direction }, delay: rand(700, 1000) };
-    }
-    case 'sniffing': {
-      refs.walkTicksLeft.current = newWalkBurstTicks();
-      return { state: { ...prev, phase: 'walking' }, delay: rand(700, 1000) };
-    }
+function expandRect(rect: DOMRect, margin: number): Rect {
+  return {
+    left: rect.left - margin,
+    top: rect.top - margin,
+    right: rect.right + margin,
+    bottom: rect.bottom + margin,
+  };
+}
+
+// The guinea pig's own position is tracked as its top-left corner (matches
+// how forbidden-rect collision is checked), even though the DOM element
+// itself is centered via translate(-50%, -50%) for rendering convenience.
+function getForbiddenRects(): Rect[] {
+  const rects: Rect[] = [];
+  const card = document.querySelector('.auth-card');
+  if (card) rects.push(expandRect(card.getBoundingClientRect(), CARD_MARGIN));
+  const toggle = document.querySelector('.theme-toggle');
+  if (toggle) rects.push(expandRect(toggle.getBoundingClientRect(), TOGGLE_MARGIN));
+  return rects;
+}
+
+function overlapsAny(x: number, y: number, size: Size, rects: Rect[]): boolean {
+  return rects.some(
+    (r) => x < r.right && x + size.w > r.left && y < r.bottom && y + size.h > r.top
+  );
+}
+
+function pickTarget(bounds: Bounds, size: Size, forbidden: Rect[]): { x: number; y: number } {
+  for (let i = 0; i < 40; i++) {
+    const x = rand(bounds.minX, bounds.maxX);
+    const y = rand(bounds.minY, bounds.maxY);
+    if (!overlapsAny(x, y, size, forbidden)) return { x, y };
   }
+  // Fallback: top-left corner of the safe area is never inside a
+  // reasonably-sized card/toggle exclusion zone.
+  return { x: bounds.minX, y: bounds.minY };
+}
+
+function clamp(v: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, v));
 }
 
 export function useGuineaPigMotion(reducedMotion: boolean): GuineaPigMotion {
-  const [state, setState] = useState<GuineaPigState>({
-    perimeterT: START_T,
-    direction: 1,
-    phase: 'pausing',
-    earTwitch: false,
-  });
+  const guineaPigRef = useRef<HTMLDivElement | null>(null);
+  const [phase, setPhase] = useState<GuineaPigPhase>('pausing');
+  const [earTwitch, setEarTwitch] = useState(false);
   const [poops, setPoops] = useState<Poop[]>([]);
-  const walkTicksLeft = useRef(0);
   const poopIdCounter = useRef(0);
-  // Kept in sync every render so triggerPoop (a click handler, not part of
-  // the tick loop) can read the current position without a stale closure.
-  const stateRef = useRef(state);
-  stateRef.current = state;
+
+  // Top-left corner, in viewport px. Mutated every frame by the rAF loop and
+  // written straight to the DOM — never routed through React state, so
+  // there's no stale-frame risk when a click reads it mid-motion.
+  const positionRef = useRef({ x: 0, y: 0 });
+  const targetRef = useRef({ x: 0, y: 0 });
+  const facingRef = useRef<Facing>(1);
+  const movingRef = useRef(false);
+  const reactionUntilRef = useRef(0);
+  const sizeRef = useRef<Size>(DESKTOP_SIZE);
+
+  function applyTransform() {
+    const el = guineaPigRef.current;
+    if (!el) return;
+    el.style.left = `${positionRef.current.x}px`;
+    el.style.top = `${positionRef.current.y}px`;
+    el.style.transform = `scaleX(${facingRef.current})`;
+  }
 
   const triggerPoop = useCallback(() => {
-    // No cooldown — click as fast as you want, they pile up.
-    const { perimeterT, direction } = stateRef.current;
-    // Small jitter per click so rapid-fire clicks fan out into a little pile
-    // instead of stacking exactly on top of each other.
-    const jitter = rand(-0.018, 0.018);
-    const behindT = normalizeT(perimeterT - direction * POOP_BEHIND_OFFSET + jitter);
-    const edge = Math.floor(behindT) as Edge;
-    const along = behindT - edge;
+    const size = sizeRef.current;
+    const facing = facingRef.current;
+    const anchor = BUTT_ANCHOR[facing];
+    const worldX = positionRef.current.x + anchor.x * size.w;
+    const worldY = positionRef.current.y + anchor.y * size.h;
     poopIdCounter.current += 1;
+    setPoops((prev) => [...prev, { id: poopIdCounter.current, x: worldX, y: worldY }]);
 
-    // Truly unlimited — no FIFO cap, pile up as many as you click.
-    setPoops((prev) => [...prev, { id: poopIdCounter.current, edge, along }]);
+    // Brief pause, then resume toward whatever target was already set —
+    // no new target is chosen because of a click.
+    reactionUntilRef.current = performance.now() + REACTION_MS;
   }, []);
 
-  useEffect(() => {
-    if (reducedMotion) return;
+  useLayoutEffect(() => {
+    const size = getSize();
+    sizeRef.current = size;
+    const bounds = getBounds(size);
+    // Start somewhere already inside the safe area, away from the card by
+    // construction (top-left-ish corner), then pick a first real target
+    // shortly after mount.
+    positionRef.current = { x: bounds.minX, y: bounds.minY };
+    targetRef.current = { ...positionRef.current };
+    applyTransform();
 
-    let timeoutId = 0;
-    let earTimeoutId = 0;
-    let cancelled = false;
-
-    const refs: TickRefs = { walkTicksLeft };
-
-    function scheduleTick(delay: number) {
-      timeoutId = window.setTimeout(tick, delay);
+    if (reducedMotion) {
+      return;
     }
 
-    function tick() {
-      if (cancelled) return;
-      setState((prev) => {
-        const { state: next, delay } = pickNext(prev, refs);
-        scheduleTick(delay);
-        return next;
-      });
+    let rafId = 0;
+    let sniffTimeoutId = 0;
+    let pauseTimeoutId = 0;
+    let earTimeoutId = 0;
+    let cancelled = false;
+    let lastTime = performance.now();
+
+    function scheduleNextTarget(delay: number) {
+      pauseTimeoutId = window.setTimeout(() => {
+        if (cancelled) return;
+        const s = sizeRef.current;
+        targetRef.current = pickTarget(getBounds(s), s, getForbiddenRects());
+        movingRef.current = true;
+        setPhase('walking');
+      }, delay);
+    }
+
+    function arrive() {
+      movingRef.current = false;
+      setPhase('pausing');
+      const willSniff = Math.random() < 0.5;
+      if (willSniff) {
+        sniffTimeoutId = window.setTimeout(() => {
+          if (cancelled) return;
+          setPhase('sniffing');
+        }, rand(150, 400));
+      }
+      scheduleNextTarget(rand(1200, 3000));
+    }
+
+    function loop(now: number) {
+      rafId = requestAnimationFrame(loop);
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+
+      if (now < reactionUntilRef.current) {
+        applyTransform();
+        return;
+      }
+
+      if (movingRef.current) {
+        const dx = targetRef.current.x - positionRef.current.x;
+        const dy = targetRef.current.y - positionRef.current.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < ARRIVE_THRESHOLD) {
+          positionRef.current = { ...targetRef.current };
+          arrive();
+        } else {
+          const ease = Math.min(1, dist / EASE_DISTANCE);
+          const speed = BASE_SPEED * (0.35 + 0.65 * ease);
+          const moveDist = Math.min(dist, speed * dt);
+          const t = moveDist / dist;
+          positionRef.current = {
+            x: positionRef.current.x + dx * t,
+            y: positionRef.current.y + dy * t,
+          };
+          if (Math.abs(dx) > 0.5) facingRef.current = dx > 0 ? 1 : -1;
+        }
+      }
+      applyTransform();
     }
 
     function scheduleEarTwitch() {
       earTimeoutId = window.setTimeout(() => {
         if (cancelled) return;
-        setState((prev) => (prev.phase === 'pausing' ? { ...prev, earTwitch: true } : prev));
+        setEarTwitch(true);
         window.setTimeout(() => {
           if (cancelled) return;
-          setState((prev) => (prev.earTwitch ? { ...prev, earTwitch: false } : prev));
+          setEarTwitch(false);
         }, 420);
         scheduleEarTwitch();
       }, rand(2500, 5500));
     }
 
-    scheduleTick(rand(900, 1600));
+    function onResize() {
+      const s = getSize();
+      sizeRef.current = s;
+      const b = getBounds(s);
+      positionRef.current = {
+        x: clamp(positionRef.current.x, b.minX, b.maxX),
+        y: clamp(positionRef.current.y, b.minY, b.maxY),
+      };
+      targetRef.current = {
+        x: clamp(targetRef.current.x, b.minX, b.maxX),
+        y: clamp(targetRef.current.y, b.minY, b.maxY),
+      };
+      applyTransform();
+    }
+
+    rafId = requestAnimationFrame(loop);
+    scheduleNextTarget(rand(600, 1400));
     scheduleEarTwitch();
+    window.addEventListener('resize', onResize);
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timeoutId);
+      cancelAnimationFrame(rafId);
+      window.clearTimeout(sniffTimeoutId);
+      window.clearTimeout(pauseTimeoutId);
       window.clearTimeout(earTimeoutId);
+      window.removeEventListener('resize', onResize);
     };
   }, [reducedMotion]);
 
-  return { ...state, poops, triggerPoop };
+  return { guineaPigRef, phase, earTwitch, poops, triggerPoop };
 }

@@ -236,13 +236,15 @@ p {
   padding: 48px;
 }
 
-/* Guinea pig mascot — a quiet pixel-inspired creature that ambles around the
-   inner rim of the login page, always along the viewport edge, never through
-   the center. Position/pose/poop history come from useGuineaPigMotion and
-   never depend on theme; only these CSS custom properties (--mint,
-   --gp-secondary, --gp-ink, --bg) change on toggle, so switching theme
-   repaints the same DOM in place without touching the animation state. The
-   poop's fill is a fixed brand brown (#a8672c), intentionally not themed. */
+/* Guinea pig mascot — a quiet pixel-inspired creature that roams the login
+   page freely (never through the login card), driven by a requestAnimationFrame
+   loop in useGuineaPigMotion that writes position directly to this element's
+   style each frame (bypassing React state for perf) rather than through
+   left/top CSS transitions. Position/pose/poop history never depend on
+   theme; only these CSS custom properties (--mint, --gp-secondary, --gp-ink,
+   --bg) change on toggle, so switching theme repaints the same DOM in place
+   without touching the animation state. The poop's fill is a fixed brand
+   brown (#a8672c), intentionally not themed. */
 
 .guinea-pig-stage {
   position: fixed;
@@ -254,14 +256,16 @@ p {
 
 .guinea-pig-track {
   position: absolute;
-  inset: 24px;
+  inset: 0;
 }
 
 .guinea-pig {
   position: absolute;
   pointer-events: auto;
   cursor: pointer;
-  transition: left 700ms ease-in-out, top 700ms ease-in-out, transform 420ms ease;
+  /* left/top are set per-frame by JS (rAF), not CSS-transitioned — only the
+     facing-flip mirror gets a short transition so it doesn't snap instantly. */
+  transition: transform 180ms ease;
   will-change: left, top, transform;
 }
 
@@ -409,10 +413,6 @@ p {
 }
 
 @media (max-width: 640px) {
-  .guinea-pig-track {
-    inset: 14px;
-  }
-
   .gp-svg {
     width: 44px;
     height: 28px;
