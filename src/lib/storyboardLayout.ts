@@ -6,8 +6,10 @@ export interface LayoutPreset {
   columns: number;
   cellsPerPage: number;
   orientation: 'landscape' | 'portrait';
-  /** Informs cell proportions only — actual images are always contain-fit to their own real
-   * aspect ratio, never stretched/cropped to this. */
+  /** Reference/layout hint ONLY — used for page orientation/column count and as the fallback
+   * shape for the "이미지 없음" placeholder when a cut has no real image to measure. Never used
+   * to size, crop, or stretch an actual image: real images are always sized from their own
+   * intrinsic pixel dimensions (see exportImageUtils.ts), regardless of this value. */
   imageAspect: number;
 }
 
@@ -26,16 +28,4 @@ export function paginateCuts(cuts: Cut[], cellsPerPage: number = CELLS_PER_PAGE)
     pages.push(cuts.slice(i, i + cellsPerPage));
   }
   return pages.length > 0 ? pages : [[]];
-}
-
-/** Computes a contain-fit rect (no crop, no stretch) for an image of `imgW`x`imgH` inside a
- * `boxW`x`boxH` box, centered — the shared math behind PDF's manual placement (PPTX gets this
- * for free from pptxgenjs's own `sizing: 'contain'`, but the same formula still applies there
- * conceptually). */
-export function containFit(imgW: number, imgH: number, boxW: number, boxH: number) {
-  if (imgW <= 0 || imgH <= 0) return { x: 0, y: 0, w: boxW, h: boxH };
-  const scale = Math.min(boxW / imgW, boxH / imgH);
-  const w = imgW * scale;
-  const h = imgH * scale;
-  return { x: (boxW - w) / 2, y: (boxH - h) / 2, w, h };
 }

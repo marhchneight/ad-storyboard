@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { deflateSync } from 'node:zlib';
 import { jsPDF } from 'jspdf';
 import { buildStoryboardPdf } from './pdfExport';
 import type { Project, Cut } from '../types';
@@ -53,6 +54,65 @@ const TINY_PNG_BASE64 =
 function tinyPngBlob(): Blob {
   const bytes = Uint8Array.from(atob(TINY_PNG_BASE64), (c) => c.charCodeAt(0));
   return new Blob([bytes], { type: 'image/png' });
+}
+
+// Builds a genuinely decodable grayscale PNG at the given pixel dimensions (real IDAT data, not
+// just an IHDR stub) so jsPDF can actually embed it — needed to prove the export renders at the
+// image's REAL aspect ratio, not project.aspect_ratio, for non-square dimensions.
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? (0xedb88320 ^ (c >>> 1)) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const b of bytes) crc = CRC_TABLE[(crc ^ b) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const typeBytes = new TextEncoder().encode(type);
+  const out = new Uint8Array(4 + 4 + data.length + 4);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, data.length);
+  out.set(typeBytes, 4);
+  out.set(data, 8);
+  const crcInput = new Uint8Array(4 + data.length);
+  crcInput.set(typeBytes, 0);
+  crcInput.set(data, 4);
+  view.setUint32(8 + data.length, crc32(crcInput));
+  return out;
+}
+
+function realPngBytes(width: number, height: number): Uint8Array {
+  const signature = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const ihdrData = new Uint8Array(13);
+  const ihdrView = new DataView(ihdrData.buffer);
+  ihdrView.setUint32(0, width);
+  ihdrView.setUint32(4, height);
+  ihdrData[8] = 8; // bit depth
+  ihdrData[9] = 0; // color type: grayscale
+  const ihdr = pngChunk('IHDR', ihdrData);
+
+  const rowBytes = 1 + width; // 1 filter byte (None) + 1 byte/pixel
+  const raw = new Uint8Array(rowBytes * height);
+  const compressed = new Uint8Array(deflateSync(Buffer.from(raw)));
+  const idat = pngChunk('IDAT', compressed);
+  const iend = pngChunk('IEND', new Uint8Array(0));
+
+  const total = new Uint8Array(signature.length + ihdr.length + idat.length + iend.length);
+  let offset = 0;
+  for (const part of [signature, ihdr, idat, iend]) { total.set(part, offset); offset += part.length; }
+  return total;
+}
+
+function realPngBlob(width: number, height: number): Blob {
+  return new Blob([realPngBytes(width, height)], { type: 'image/png' });
 }
 
 // Node's test environment (no jsdom) doesn't provide FileReader. Polyfill a
@@ -176,5 +236,56 @@ describe('buildStoryboardPdf', () => {
 
     const portraitDoc = await buildStoryboardPdf(makeProject({ aspect_ratio: '9:16' }), makeCuts(1));
     expect(portraitDoc.internal.pageSize.getHeight()).toBeGreaterThan(portraitDoc.internal.pageSize.getWidth());
+  });
+
+  it('renders a 1:1 real image at 1:1 even inside a 9:16 project (source dimensions win, not project.aspect_ratio)', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/fonts/Pretendard-Regular.ttf') {
+        return { arrayBuffer: async () => koreanFontArrayBuffer() } as unknown as Response;
+      }
+      return { ok: true, blob: async () => realPngBlob(1024, 1024) } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const addImageSpy = vi.spyOn(jsPDF.API as unknown as { addImage: (...args: unknown[]) => unknown }, 'addImage');
+
+    const cuts = [makeCut({ id: 'c1', order_index: 0, image_url: 'https://example.com/square.png' })];
+    await buildStoryboardPdf(makeProject({ aspect_ratio: '9:16' }), cuts);
+
+    const [, , , , w, h] = addImageSpy.mock.calls[0] as unknown as [unknown, unknown, unknown, unknown, number, number];
+    expect(Math.abs(w / h - 1)).toBeLessThan(0.001);
+  });
+
+  it('renders a 16:9 real image at 16:9 even inside a 9:16 project (never stretched into a tall frame)', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/fonts/Pretendard-Regular.ttf') {
+        return { arrayBuffer: async () => koreanFontArrayBuffer() } as unknown as Response;
+      }
+      return { ok: true, blob: async () => realPngBlob(1536, 864) } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const addImageSpy = vi.spyOn(jsPDF.API as unknown as { addImage: (...args: unknown[]) => unknown }, 'addImage');
+
+    const cuts = [makeCut({ id: 'c1', order_index: 0, image_url: 'https://example.com/wide.png' })];
+    await buildStoryboardPdf(makeProject({ aspect_ratio: '9:16' }), cuts);
+
+    const [, , , , w, h] = addImageSpy.mock.calls[0] as unknown as [unknown, unknown, unknown, unknown, number, number];
+    expect(Math.abs(w / h - 1536 / 864)).toBeLessThan(0.001);
+  });
+
+  it('renders a 9:16 real image at 9:16 even inside a 16:9 project', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/fonts/Pretendard-Regular.ttf') {
+        return { arrayBuffer: async () => koreanFontArrayBuffer() } as unknown as Response;
+      }
+      return { ok: true, blob: async () => realPngBlob(864, 1536) } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const addImageSpy = vi.spyOn(jsPDF.API as unknown as { addImage: (...args: unknown[]) => unknown }, 'addImage');
+
+    const cuts = [makeCut({ id: 'c1', order_index: 0, image_url: 'https://example.com/tall.png' })];
+    await buildStoryboardPdf(makeProject({ aspect_ratio: '16:9' }), cuts);
+
+    const [, , , , w, h] = addImageSpy.mock.calls[0] as unknown as [unknown, unknown, unknown, unknown, number, number];
+    expect(Math.abs(w / h - 864 / 1536)).toBeLessThan(0.001);
   });
 });

@@ -1,8 +1,8 @@
 import { jsPDF } from 'jspdf';
 import type { Project, Cut } from '../types';
 import { downloadBlob } from './download';
-import { detectImageMime } from './imageMime';
-import { LAYOUT_PRESETS, paginateCuts, containFit } from './storyboardLayout';
+import { LAYOUT_PRESETS, paginateCuts } from './storyboardLayout';
+import { loadCutImage, fitImageContain } from './exportImageUtils';
 
 const KOREAN_FONT_URL = '/fonts/Pretendard-Regular.ttf';
 const KOREAN_FONT_NAME = 'Pretendard';
@@ -40,15 +40,6 @@ async function registerKoreanFont(doc: jsPDF): Promise<boolean> {
   }
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-}
-
 // Layout constants (pt, unit: 'pt' doc). Tuned for a 5-cuts-per-page overview grid rather than
 // the old one-page-per-cut layout.
 const MARGIN = 40;
@@ -56,7 +47,11 @@ const HEADER_HEIGHT = 36;
 const GAP = 14;
 const BADGE_HEIGHT = 14;
 const SMALL_GAP = 4;
-const IMAGE_BOX_RATIO = 0.62; // share of each cell's post-badge height given to the image box
+// Upper bound on how much of each cell's post-badge height the image may use — the image's
+// actual rendered height is then derived from its own real aspect ratio (via fitImageContain)
+// and is very often smaller than this cap, handing the leftover space to the text below rather
+// than leaving a blank letterboxed gap around the image itself.
+const MAX_IMAGE_AREA_SHARE = 0.75;
 
 function drawBox(doc: jsPDF, x: number, y: number, w: number, h: number) {
   doc.setFillColor(245, 245, 245);
@@ -93,29 +88,32 @@ function drawWrappedText(
   return visible.length * lineHeight;
 }
 
-// Fetches, contain-fits (never crops/stretches — letterbox/pillarbox instead), and embeds a
-// cut's image into the given box; draws a bordered "이미지 없음" placeholder in its place if
-// there's no image_url or the fetch/decode fails.
-async function drawCutImage(doc: jsPDF, cut: Cut, x: number, y: number, w: number, h: number) {
-  drawBox(doc, x, y, w, h);
-  if (!cut.image_url) {
-    drawPlaceholder(doc, x, y, w, h);
-    return;
+// Embeds a cut's image at its own real aspect ratio, scaled (never cropped/stretched) to fit
+// within (maxWidth, maxHeight) — the rendered rect's size comes entirely from the image's own
+// intrinsic pixel dimensions (via loadCutImage/fitImageContain), never from project.aspect_ratio
+// or any fixed box shape. Draws a bordered "이미지 없음" placeholder, sized like a typical image
+// for this project (aspect_ratio used only as a layout hint here, never forced onto a real
+// image), if there's no image_url or the fetch/decode fails. Returns the actual rendered height,
+// so the caller can place the text below it flush against the real image bottom instead of a
+// fixed-height box.
+async function drawCutImage(
+  doc: jsPDF, cut: Cut, x: number, y: number, maxWidth: number, maxHeight: number, placeholderAspect: number,
+): Promise<number> {
+  const loaded = cut.image_url ? await loadCutImage(cut.image_url) : null;
+
+  if (loaded) {
+    const fit = fitImageContain(loaded.width, loaded.height, maxWidth, maxHeight);
+    const offsetX = x + (maxWidth - fit.width) / 2;
+    const format = loaded.mimeType === 'image/jpeg' ? 'JPEG' : loaded.mimeType === 'image/webp' ? 'WEBP' : 'PNG';
+    doc.addImage(loaded.dataUrl, format, offsetX, y, fit.width, fit.height);
+    return fit.height;
   }
-  try {
-    const res = await fetch(cut.image_url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    const { mimeType } = detectImageMime(blob, cut.image_url);
-    const dataUrl = await blobToDataUrl(blob);
-    const props = doc.getImageProperties(dataUrl);
-    const fit = containFit(props.width, props.height, w, h);
-    const format = mimeType === 'image/jpeg' ? 'JPEG' : mimeType === 'image/webp' ? 'WEBP' : 'PNG';
-    doc.addImage(dataUrl, format, x + fit.x, y + fit.y, fit.w, fit.h);
-  } catch (err) {
-    console.warn('Failed to embed image for a cut:', err);
-    drawPlaceholder(doc, x, y, w, h);
-  }
+
+  const fit = fitImageContain(placeholderAspect, 1, maxWidth, maxHeight);
+  const offsetX = x + (maxWidth - fit.width) / 2;
+  drawBox(doc, offsetX, y, fit.width, fit.height);
+  drawPlaceholder(doc, offsetX, y, fit.width, fit.height);
+  return fit.height;
 }
 
 export async function buildStoryboardPdf(project: Project, cuts: Cut[]): Promise<jsPDF> {
@@ -157,11 +155,14 @@ export async function buildStoryboardPdf(project: Project, cuts: Cut[]): Promise
 
       const imageBoxY = cellY + BADGE_HEIGHT;
       const remaining = cellHeight - BADGE_HEIGHT;
-      const imageBoxHeight = remaining * IMAGE_BOX_RATIO;
-      const textBoxY = imageBoxY + imageBoxHeight + SMALL_GAP;
-      const textBoxHeight = remaining - imageBoxHeight - SMALL_GAP;
+      const maxImageHeight = remaining * MAX_IMAGE_AREA_SHARE;
 
-      await drawCutImage(doc, cut, cellX, imageBoxY, cellWidth, imageBoxHeight);
+      const renderedImageHeight = await drawCutImage(
+        doc, cut, cellX, imageBoxY, cellWidth, maxImageHeight, preset.imageAspect,
+      );
+
+      const textBoxY = imageBoxY + renderedImageHeight + SMALL_GAP;
+      const textBoxHeight = remaining - renderedImageHeight - SMALL_GAP;
 
       const sceneHeight = textBoxHeight * 0.55;
       const dialogueHeight = textBoxHeight - sceneHeight - 2;
