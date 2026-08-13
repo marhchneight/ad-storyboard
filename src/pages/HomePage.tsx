@@ -116,6 +116,7 @@ export default function HomePage() {
         copyText: context.copyText,
         directingDirection: direction,
         creativeRisk,
+        creativeDna: context.dna,
         ...sceneCountParams,
       });
       navigate(`/projects/${projectId}`);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { analyzeCreativeDna, applyCreativeDna, fileToDataUrl, hasKoreanDna, localizeCreativeDna } from '../../lib/creativeDnaApi';
 import { scrollToAndHighlightAppliedCuts } from '../../lib/dnaHighlight';
 import { supabase } from '../../lib/supabaseClient';
+import CreativeDnaResult from './CreativeDnaResult';
 import type { Project } from '../../types';
 
 interface Props {
@@ -176,25 +177,7 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
 
       {dna && (
         <div className="dna-result">
-          <span className="field-label">비주얼 톤</span>
-          <div className="dna-scores">
-            {dna.visualLanguage.map((v) => (
-              <div className="dna-score-row" key={v.label}>
-                <span className="dna-score-label">{v.labelKo ?? v.label}</span>
-                <div className="dna-score-bar">
-                  <div className="dna-score-fill" style={{ width: `${Math.max(0, Math.min(100, v.score))}%` }} />
-                </div>
-                <span className="dna-score-value">{v.score}%</span>
-              </div>
-            ))}
-          </div>
-
-          <DnaList title="카메라 연출" items={dna.cameraDna} itemsKo={dna.cameraDnaKo} />
-          <DnaList title="조명" items={dna.lightingDna} itemsKo={dna.lightingDnaKo} />
-          <DnaList title="화면 구성" items={dna.compositionDna} itemsKo={dna.compositionDnaKo} />
-          <DnaList title="편집 / 리듬" items={dna.editRhythmDna} itemsKo={dna.editRhythmDnaKo} />
-          <DnaList title="컬러 / 무드" items={dna.colorMood} itemsKo={dna.colorMoodKo} />
-          <DnaList title="크리에이티브 방향" items={dna.creativePrinciples} itemsKo={dna.creativePrinciplesKo} />
+          <CreativeDnaResult dna={dna} />
 
           <button type="button" className="btn-primary btn-block" onClick={handleApplyDna} disabled={applying}>
             {applying ? 'DNA를 적용하는 중...' : '스토리보드에 DNA 적용'}
@@ -216,18 +199,6 @@ export default function CreativeDnaPanel({ project, onBeforeApply, onApplied }: 
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function DnaList({ title, items, itemsKo }: { title: string; items: string[]; itemsKo?: string[] }) {
-  if (items.length === 0) return null;
-  return (
-    <div className="dna-list">
-      <span className="dna-list-title">{title}</span>
-      <ul>
-        {items.map((item, i) => <li key={i}>{itemsKo?.[i] ?? item}</li>)}
-      </ul>
     </div>
   );
 }

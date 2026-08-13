@@ -404,6 +404,45 @@ function buildProductReferenceNote(brief: Record<string, unknown>): string {
     'do not force it into every shot.';
 }
 
+function stringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+function buildDnaSectionLine(label: string, observations: unknown, application: unknown): string | null {
+  const obs = stringArray(observations);
+  if (obs.length === 0) return null;
+  const app = stringArray(application);
+  const appPart = app.length > 0 ? ` | Storyboard application: ${app.join('; ')}` : '';
+  return `${label}: ${obs.join('; ')}${appPart}`;
+}
+
+// Reference Creative DNA (see creative-dna edge function) comes from a separate visual-language
+// reference the user analyzed independently of this brief — it is creative GUIDANCE only, never a
+// hard rule. The trailing priority line makes that explicit to the model: it must never override
+// the user's own instructions, product/reference identity constraints, or an already-confirmed
+// Creative Direction. Reads the English fields (not the "...Ko" display mirrors), matching every
+// other model-facing field in this file.
+function buildCreativeDnaGuidance(creativeDna: unknown): string {
+  if (!creativeDna || typeof creativeDna !== 'object') return '';
+  const d = creativeDna as Record<string, unknown>;
+  const editRhythmLabel = d.editRhythmInferred === false ? 'Editing/rhythm' : 'Editing/rhythm (suggested, not observed)';
+  const lines = [
+    buildDnaSectionLine('Camera', d.cameraDna, d.cameraApplication),
+    buildDnaSectionLine('Lighting', d.lightingDna, d.lightingApplication),
+    buildDnaSectionLine('Composition', d.compositionDna, d.compositionApplication),
+    buildDnaSectionLine(editRhythmLabel, d.editRhythmDna, d.editRhythmApplication),
+    buildDnaSectionLine('Color/mood', d.colorMood, d.colorMoodApplication),
+    buildDnaSectionLine('Product treatment', d.productTreatment, d.productTreatmentApplication),
+    buildDnaSectionLine('Creative direction', d.creativePrinciples, d.creativePrinciplesApplication),
+  ].filter((l): l is string => !!l);
+  if (lines.length === 0) return '';
+  return '\n\nReference Creative DNA (from a separate visual-language reference the user analyzed — use as ' +
+    'creative guidance only, not a literal template):\n' + lines.join('\n') +
+    '\nPriority: this guidance must never override the user\'s explicit instructions above, the product/' +
+    'reference identity constraints, or an already-confirmed Creative Direction elsewhere in this prompt — ' +
+    'apply it only where it does not conflict with those, and only where it genuinely fits the scene.';
+}
+
 const CREATIVE_RISK_GUIDANCE: Record<string, string> = {
   safe:
     'Creative risk tier: SAFE. Prioritize a composition that is reliably shootable and brand-safe by ordinary ' +
@@ -457,7 +496,7 @@ function buildDirectingDirectionBlock(direction: unknown, creativeRisk: unknown)
     `${parts.join('\n')}${riskLine}`;
 }
 
-function buildBriefSummary(brief: Record<string, unknown>, freeformIdea: string): string {
+function buildBriefSummary(brief: Record<string, unknown>, freeformIdea: string, creativeDna?: unknown): string {
   const lines: string[] = [];
   if (freeformIdea.trim()) lines.push(`Free-form idea: ${freeformIdea.trim()}`);
   const fieldLabels: [string, string][] = [
@@ -481,7 +520,7 @@ function buildBriefSummary(brief: Record<string, unknown>, freeformIdea: string)
   const withBrand = (brandContext && typeof brandContext === 'object')
     ? summary + buildBrandContextSummary(brandContext as Record<string, unknown>)
     : summary;
-  return withBrand + buildProductReferenceNote(brief);
+  return withBrand + buildProductReferenceNote(brief) + buildCreativeDnaGuidance(creativeDna);
 }
 
 interface SceneRole {
@@ -516,7 +555,7 @@ Deno.serve(async (req) => {
     const {
       title, style, brief, freeformIdea, creativeDirection, copyText, aspectRatio,
       sceneCountMode, requestedSceneCount, targetDurationSeconds,
-      directingDirection, creativeRisk,
+      directingDirection, creativeRisk, creativeDna,
     } = await req.json();
     if (!title || typeof title !== 'string') return jsonResponse({ error: 'title required' }, 400);
     if (!style || !['sketch', 'animation', 'live_action'].includes(style)) {
@@ -549,6 +588,14 @@ Deno.serve(async (req) => {
       const refUrlErr = validateUrl((brief as Record<string, unknown>).productReferenceImageUrl, 'productReferenceImageUrl');
       if (refUrlErr) return jsonResponse({ error: refUrlErr }, 400);
     }
+    if (creativeDna !== undefined) {
+      if (typeof creativeDna !== 'object' || creativeDna === null || Array.isArray(creativeDna)) {
+        return jsonResponse({ error: 'creativeDna 형식이 올바르지 않습니다.' }, 400);
+      }
+      if (JSON.stringify(creativeDna).length > 50_000) {
+        return jsonResponse({ error: 'creativeDna 데이터가 너무 큽니다.' }, 400);
+      }
+    }
 
     const authHeader = req.headers.get('Authorization') ?? '';
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
@@ -575,7 +622,7 @@ Deno.serve(async (req) => {
     let visualBible: VisualBible;
 
     if (treatment) {
-      const briefSummary = buildBriefSummary(brief ?? {}, freeformIdea ?? '');
+      const briefSummary = buildBriefSummary(brief ?? {}, freeformIdea ?? '', creativeDna);
       const sceneCountInstruction = buildSceneCountInstruction(
         sceneCountMode, requestedSceneCount, targetDurationSeconds, copyText
       );
@@ -615,7 +662,7 @@ Deno.serve(async (req) => {
       shots = shotsResult.shots;
       visualBible = shotsResult.visualBible;
     } else {
-      const briefSummary = buildBriefSummary(brief ?? {}, freeformIdea ?? '');
+      const briefSummary = buildBriefSummary(brief ?? {}, freeformIdea ?? '', creativeDna);
 
       const userPrompt = `${DIRECTOR_OUTPUT_CONTRACT}\n\n${SCENE_ROLE_INSTRUCTIONS}\n\n${ENTITY_INSTRUCTIONS}\n\n다음은 광고 브리프입니다:\n${briefSummary}\n\n` +
         `이 브리프를 바탕으로 광고 감독으로서 전체 스토리보드를 연출하세요. 광고의 목적과 타깃, 플랫폼, ` +
@@ -694,6 +741,10 @@ Deno.serve(async (req) => {
         creative_risk: (typeof creativeRisk === 'string' && CREATIVE_RISK_GUIDANCE[creativeRisk]) ? creativeRisk : null,
         brief: brief ?? {},
         visual_bible: visualBible,
+        // Persists the reference Creative DNA (if any) the user analyzed before creating this
+        // project — previously this was silently discarded after generation, so opening the
+        // Editor's Creative DNA panel afterward always started from a from-scratch re-analysis.
+        creative_dna: (creativeDna && typeof creativeDna === 'object') ? creativeDna : null,
       })
       .select()
       .single();

@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 import type {
-  AspectRatio, CreativeBrief, CreativeRisk, CreativeTreatment, DirectingOption, Project, SceneCountMode,
-  StoryboardStyle,
+  AspectRatio, CreativeBrief, CreativeDna, CreativeRisk, CreativeTreatment, DirectingOption, Project,
+  SceneCountMode, StoryboardStyle,
 } from '../types';
 
 export async function createProject(input: {
@@ -61,6 +61,9 @@ export async function directStoryboard(input: {
   /** The Director's Room option the user picked, if they went through it. */
   directingDirection?: DirectingOption;
   creativeRisk?: CreativeRisk;
+  /** A reference Creative DNA analysis, if the user came through the Reference tab — used as
+   * creative guidance for the shot list (never a hard rule; see ai-director's priority order). */
+  creativeDna?: CreativeDna;
 }): Promise<string> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
@@ -82,6 +85,7 @@ export async function directStoryboard(input: {
       targetDurationSeconds: input.targetDurationSeconds,
       directingDirection: input.directingDirection,
       creativeRisk: input.creativeRisk,
+      creativeDna: input.creativeDna,
     }),
   });
 

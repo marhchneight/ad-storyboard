@@ -60,6 +60,36 @@ export interface CreativeDna {
   editRhythmDnaKo?: string[];
   colorMoodKo?: string[];
   creativePrinciplesKo?: string[];
+
+  // Storyboard-application guidance per section — actionable suggestions for
+  // translating the observation above into actual directing choices, not a
+  // restatement of the observation. Added after the fields above, so absent
+  // on projects analyzed before this existed; UI must treat every field
+  // below as optional and never assume it's present.
+  cameraApplication?: string[];
+  cameraApplicationKo?: string[];
+  lightingApplication?: string[];
+  lightingApplicationKo?: string[];
+  compositionApplication?: string[];
+  compositionApplicationKo?: string[];
+  editRhythmApplication?: string[];
+  editRhythmApplicationKo?: string[];
+  colorMoodApplication?: string[];
+  colorMoodApplicationKo?: string[];
+  creativePrinciplesApplication?: string[];
+  creativePrinciplesApplicationKo?: string[];
+
+  /** True when editRhythmDna describes AI-inferred/suggested pacing rather than an observed sequence — always true today, since analysis only ever sees a single still image or a text description, never real footage. */
+  editRhythmInferred?: boolean;
+
+  /** 3-5 representative hex colors, when the AI can identify them from an actual analyzed image with reasonable confidence — never present for a text-description reference. */
+  dominantColors?: string[];
+
+  /** How the product (if any) is framed/positioned in the reference — empty array when no product is visible; never fabricated. */
+  productTreatment?: string[];
+  productTreatmentKo?: string[];
+  productTreatmentApplication?: string[];
+  productTreatmentApplicationKo?: string[];
 }
 
 export interface CreativeTreatmentApproach {

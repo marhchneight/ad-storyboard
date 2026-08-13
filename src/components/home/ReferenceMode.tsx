@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { analyzeCreativeDna, fileToDataUrl } from '../../lib/creativeDnaApi';
 import { generateCreativeDirection, type SceneCountParams } from '../../lib/creativeDirectionApi';
+import CreativeDnaResult from '../creative-dna/CreativeDnaResult';
 import type { CreativeBrief, CreativeDna, CreativeTreatment } from '../../types';
 
 type ReferenceInputMode = 'image_upload' | 'image_url' | 'text';
@@ -114,17 +115,7 @@ export default function ReferenceMode({
 
       {dna && (
         <div className="dna-result">
-          <div className="dna-scores">
-            {dna.visualLanguage.map((v) => (
-              <div className="dna-score-row" key={v.label}>
-                <span className="dna-score-label">{v.labelKo ?? v.label}</span>
-                <div className="dna-score-bar">
-                  <div className="dna-score-fill" style={{ width: `${Math.max(0, Math.min(100, v.score))}%` }} />
-                </div>
-                <span className="dna-score-value">{v.score}%</span>
-              </div>
-            ))}
-          </div>
+          <CreativeDnaResult dna={dna} />
           <div className="field">
             <span className="field-label">어떤 광고를 만들고 싶나요? (선택)</span>
             <input value={idea} onChange={(e) => setIdea(e.target.value)} placeholder="예: 향수 광고, 20대 여성 타깃" />
