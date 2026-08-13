@@ -33,7 +33,7 @@ export default function LoginPage() {
     }
   }, []);
 
-  const welcomeTitle = isFirstVisit ? '아이디어를 콘티로 만들어볼까요?' : '다시 만나서 반가워요.';
+  const welcomeTitle = isFirstVisit ? 'Ready to direct your first idea?' : 'Welcome back!';
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

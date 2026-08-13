@@ -17,6 +17,7 @@
   --mint: #4cbbb2;
   --gp-secondary: #3a9a91;
   --gp-ink: #2c2b27;
+  --gp-poop: #4a453c;
   --card-bg: rgba(255, 255, 255, 0.88);
 
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', Arial, sans-serif;
@@ -52,6 +53,7 @@
   --mint: #4cbbb2;
   --gp-secondary: #5ecdc4;
   --gp-ink: #20211f;
+  --gp-poop: #8a8478;
   --card-bg: rgba(15, 15, 15, 0.86);
 
   color-scheme: dark;
@@ -236,11 +238,12 @@ p {
   padding: 48px;
 }
 
-/* Guinea pig mascot — a quiet pixel-inspired creature that ambles along the
-   bottom of the login page. Position/pose come from useGuineaPigMotion and
+/* Guinea pig mascot — a quiet pixel-inspired creature that ambles around the
+   inner rim of the login page, always along the viewport edge, never through
+   the center. Position/pose/poop history come from useGuineaPigMotion and
    never depend on theme; only these CSS custom properties (--mint,
-   --gp-secondary, --gp-ink, --bg) change on toggle, so switching theme
-   repaints the same DOM in place without touching the animation state. */
+   --gp-secondary, --gp-ink, --gp-poop, --bg) change on toggle, so switching
+   theme repaints the same DOM in place without touching the animation state. */
 
 .guinea-pig-stage {
   position: fixed;
@@ -250,11 +253,25 @@ p {
   overflow: hidden;
 }
 
+.guinea-pig-track {
+  position: absolute;
+  inset: 24px;
+}
+
 .guinea-pig {
   position: absolute;
-  bottom: 48px;
-  transition: left 620ms ease-in-out;
-  will-change: left;
+  transition: left 700ms ease-in-out, top 700ms ease-in-out, transform 420ms ease;
+  will-change: left, top, transform;
+}
+
+.gp-poop {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  overflow: visible;
+}
+
+.gp-poop circle {
+  fill: var(--gp-poop);
 }
 
 .gp-svg {
@@ -337,8 +354,8 @@ p {
     animation: gp-nod 0.6s ease-in-out 2;
   }
 
-  .guinea-pig.gp-looking .gp-head-group {
-    animation: gp-look 1s ease-in-out 1;
+  .guinea-pig.gp-pooping .gp-body-group {
+    animation: gp-poop-squat 0.6s ease-in-out 1;
   }
 
   .guinea-pig.gp-ear-twitch .gp-ear-left {
@@ -370,10 +387,10 @@ p {
   50% { transform: translateY(1.5px) rotate(4deg); }
 }
 
-@keyframes gp-look {
-  0%, 100% { transform: rotate(0deg); }
-  30% { transform: rotate(-10deg); }
-  70% { transform: rotate(8deg); }
+@keyframes gp-poop-squat {
+  0%, 100% { transform: scaleY(1); }
+  40% { transform: scaleY(0.88); }
+  70% { transform: scaleY(1.04); }
 }
 
 @keyframes gp-ear-twitch-left {
@@ -387,13 +404,18 @@ p {
 }
 
 @media (max-width: 640px) {
-  .guinea-pig {
-    bottom: 20px;
+  .guinea-pig-track {
+    inset: 14px;
   }
 
   .gp-svg {
-    width: 48px;
-    height: 30px;
+    width: 44px;
+    height: 28px;
+  }
+
+  .gp-poop {
+    width: 9px;
+    height: 6px;
   }
 }
 
