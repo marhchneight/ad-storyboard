@@ -17,7 +17,6 @@
   --mint: #4cbbb2;
   --gp-secondary: #3a9a91;
   --gp-ink: #2c2b27;
-  --gp-poop: #4a453c;
   --card-bg: rgba(255, 255, 255, 0.88);
 
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', Arial, sans-serif;
@@ -53,7 +52,6 @@
   --mint: #4cbbb2;
   --gp-secondary: #5ecdc4;
   --gp-ink: #20211f;
-  --gp-poop: #8a8478;
   --card-bg: rgba(15, 15, 15, 0.86);
 
   color-scheme: dark;
@@ -242,8 +240,9 @@ p {
    inner rim of the login page, always along the viewport edge, never through
    the center. Position/pose/poop history come from useGuineaPigMotion and
    never depend on theme; only these CSS custom properties (--mint,
-   --gp-secondary, --gp-ink, --gp-poop, --bg) change on toggle, so switching
-   theme repaints the same DOM in place without touching the animation state. */
+   --gp-secondary, --gp-ink, --bg) change on toggle, so switching theme
+   repaints the same DOM in place without touching the animation state. The
+   poop's fill is a fixed brand brown (#a8672c), intentionally not themed. */
 
 .guinea-pig-stage {
   position: fixed;
@@ -260,6 +259,8 @@ p {
 
 .guinea-pig {
   position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
   transition: left 700ms ease-in-out, top 700ms ease-in-out, transform 420ms ease;
   will-change: left, top, transform;
 }
@@ -268,10 +269,24 @@ p {
   position: absolute;
   transform: translate(-50%, -50%);
   overflow: visible;
+  animation: gp-poop-pop 200ms ease-out;
 }
 
-.gp-poop circle {
-  fill: var(--gp-poop);
+.gp-poop rect {
+  /* Fixed brand brown — intentionally the same in both themes. */
+  fill: #a8672c;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gp-poop {
+    animation: none;
+  }
+}
+
+@keyframes gp-poop-pop {
+  0% { transform: translate(-50%, -50%) scale(0); }
+  70% { transform: translate(-50%, -50%) scale(1.1); }
+  100% { transform: translate(-50%, -50%) scale(1); }
 }
 
 .gp-svg {
@@ -354,10 +369,6 @@ p {
     animation: gp-nod 0.6s ease-in-out 2;
   }
 
-  .guinea-pig.gp-pooping .gp-body-group {
-    animation: gp-poop-squat 0.6s ease-in-out 1;
-  }
-
   .guinea-pig.gp-ear-twitch .gp-ear-left {
     animation: gp-ear-twitch-left 0.42s ease-in-out 1;
   }
@@ -387,12 +398,6 @@ p {
   50% { transform: translateY(1.5px) rotate(4deg); }
 }
 
-@keyframes gp-poop-squat {
-  0%, 100% { transform: scaleY(1); }
-  40% { transform: scaleY(0.88); }
-  70% { transform: scaleY(1.04); }
-}
-
 @keyframes gp-ear-twitch-left {
   0%, 100% { transform: rotate(0deg); }
   50% { transform: rotate(-14deg); }
@@ -414,8 +419,8 @@ p {
   }
 
   .gp-poop {
-    width: 9px;
-    height: 6px;
+    width: 4px;
+    height: 3px;
   }
 }
 

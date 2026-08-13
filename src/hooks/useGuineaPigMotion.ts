@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-export type GuineaPigPhase = 'walking' | 'pausing' | 'sniffing' | 'pooping';
+export type GuineaPigPhase = 'walking' | 'pausing' | 'sniffing';
 
 // 0 = bottom edge, 1 = right edge, 2 = top edge, 3 = left edge.
 export type Edge = 0 | 1 | 2 | 3;
@@ -20,11 +20,15 @@ export interface GuineaPigState {
 
 export interface GuineaPigMotion extends GuineaPigState {
   poops: Poop[];
+  triggerPoop: () => void;
 }
 
 const START_T = 0.15;
 const MAX_POOPS = 8;
-const MIN_POOP_GAP_MS = 15000;
+const POOP_CLICK_COOLDOWN_MS = 15000;
+// How far "behind" the guinea pig (opposite its direction of travel) a
+// click-triggered poop lands, in perimeterT units.
+const POOP_BEHIND_OFFSET = 0.035;
 
 function rand(min: number, max: number) {
   return min + Math.random() * (max - min);
@@ -37,9 +41,6 @@ function normalizeT(t: number) {
 
 interface TickRefs {
   walkTicksLeft: { current: number };
-  lastPoopAt: { current: number };
-  poopIdCounter: { current: number };
-  onPoop: (poop: Poop) => void;
 }
 
 function newWalkBurstTicks() {
@@ -59,17 +60,7 @@ function pickNext(prev: GuineaPigState, refs: TickRefs): { state: GuineaPigState
       return { state: { ...prev, perimeterT, phase: 'pausing' }, delay: rand(1000, 3000) };
     }
     case 'pausing': {
-      const now = performance.now();
-      const canPoop = now - refs.lastPoopAt.current > MIN_POOP_GAP_MS;
       const roll = Math.random();
-      if (canPoop && roll < 0.15) {
-        const edge = Math.floor(prev.perimeterT) as Edge;
-        const along = prev.perimeterT - edge;
-        refs.lastPoopAt.current = now;
-        refs.poopIdCounter.current += 1;
-        refs.onPoop({ id: refs.poopIdCounter.current, edge, along });
-        return { state: { ...prev, phase: 'pooping' }, delay: rand(500, 800) };
-      }
       if (roll < 0.5) {
         return { state: { ...prev, phase: 'sniffing' }, delay: rand(550, 900) };
       }
@@ -78,8 +69,7 @@ function pickNext(prev: GuineaPigState, refs: TickRefs): { state: GuineaPigState
       refs.walkTicksLeft.current = newWalkBurstTicks();
       return { state: { ...prev, phase: 'walking', direction }, delay: rand(700, 1000) };
     }
-    case 'sniffing':
-    case 'pooping': {
+    case 'sniffing': {
       refs.walkTicksLeft.current = newWalkBurstTicks();
       return { state: { ...prev, phase: 'walking' }, delay: rand(700, 1000) };
     }
@@ -95,8 +85,29 @@ export function useGuineaPigMotion(reducedMotion: boolean): GuineaPigMotion {
   });
   const [poops, setPoops] = useState<Poop[]>([]);
   const walkTicksLeft = useRef(0);
-  const lastPoopAt = useRef(-Infinity);
+  const lastPoopClickAt = useRef(-Infinity);
   const poopIdCounter = useRef(0);
+  // Kept in sync every render so triggerPoop (a click handler, not part of
+  // the tick loop) can read the current position without a stale closure.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const triggerPoop = useCallback(() => {
+    const now = performance.now();
+    if (now - lastPoopClickAt.current < POOP_CLICK_COOLDOWN_MS) return;
+    lastPoopClickAt.current = now;
+
+    const { perimeterT, direction } = stateRef.current;
+    const behindT = normalizeT(perimeterT - direction * POOP_BEHIND_OFFSET);
+    const edge = Math.floor(behindT) as Edge;
+    const along = behindT - edge;
+    poopIdCounter.current += 1;
+
+    setPoops((prev) => {
+      const next = [...prev, { id: poopIdCounter.current, edge, along }];
+      return next.length > MAX_POOPS ? next.slice(next.length - MAX_POOPS) : next;
+    });
+  }, []);
 
   useEffect(() => {
     if (reducedMotion) return;
@@ -105,14 +116,7 @@ export function useGuineaPigMotion(reducedMotion: boolean): GuineaPigMotion {
     let earTimeoutId = 0;
     let cancelled = false;
 
-    function addPoop(poop: Poop) {
-      setPoops((prev) => {
-        const next = [...prev, poop];
-        return next.length > MAX_POOPS ? next.slice(next.length - MAX_POOPS) : next;
-      });
-    }
-
-    const refs: TickRefs = { walkTicksLeft, lastPoopAt, poopIdCounter, onPoop: addPoop };
+    const refs: TickRefs = { walkTicksLeft };
 
     function scheduleTick(delay: number) {
       timeoutId = window.setTimeout(tick, delay);
@@ -149,5 +153,5 @@ export function useGuineaPigMotion(reducedMotion: boolean): GuineaPigMotion {
     };
   }, [reducedMotion]);
 
-  return { ...state, poops };
+  return { ...state, poops, triggerPoop };
 }

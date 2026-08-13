@@ -41,7 +41,7 @@ const EDGE_ROTATION: Record<Edge, number> = { 0: 0, 1: -90, 2: 180, 3: 90 };
 // existing DOM in place.
 function GuineaPigImpl() {
   const reducedMotion = useReducedMotion();
-  const { perimeterT, direction, phase, earTwitch, poops } = useGuineaPigMotion(reducedMotion);
+  const { perimeterT, direction, phase, earTwitch, poops, triggerPoop } = useGuineaPigMotion(reducedMotion);
 
   const edge = Math.floor(perimeterT) as Edge;
   const along = perimeterT - edge;
@@ -63,19 +63,18 @@ function GuineaPigImpl() {
             <svg
               key={poop.id}
               className="gp-poop"
-              viewBox="0 0 12 8"
-              width="12"
-              height="8"
+              viewBox="0 0 5 4"
+              width="5"
+              height="4"
               style={{ left: `${pos.left}%`, top: `${pos.top}%` }}
             >
-              <circle cx="3" cy="4.5" r="1.3" />
-              <circle cx="6.5" cy="2.6" r="1.5" />
-              <circle cx="9.5" cy="4.8" r="1.2" />
+              <rect x="0.4" y="0.5" width="4.2" height="3" rx="1.5" ry="1.3" />
             </svg>
           );
         })}
         <div
           className={rootClassName}
+          onClick={triggerPoop}
           style={{
             left: `${left}%`,
             top: `${top}%`,
