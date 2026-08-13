@@ -77,6 +77,7 @@ export default function ProductReferenceUpload({ value, onChange, disabled }: Pr
       ) : (
         <div className="product-ref-preview">
           <img src={value.url} alt="제품 이미지 미리보기" className="product-ref-thumb" />
+          <span className="product-ref-check" aria-hidden="true">✓</span>
           <label className="btn-text product-ref-replace-btn">
             교체
             <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleInputChange}

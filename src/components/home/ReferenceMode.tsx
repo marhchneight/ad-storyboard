@@ -132,7 +132,7 @@ export default function ReferenceMode({
           {styleField}
           {aspectRatioField}
           {storyboardLengthField}
-          <button type="button" className="btn-primary btn-block" onClick={handleCreateDirection} disabled={busy}>
+          <button type="button" className="btn-accent btn-block" onClick={handleCreateDirection} disabled={busy}>
             {busy ? '연출 방향을 만드는 중...' : '이 DNA로 연출 방향 만들기 →'}
           </button>
         </div>

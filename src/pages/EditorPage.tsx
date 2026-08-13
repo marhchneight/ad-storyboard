@@ -419,6 +419,7 @@ export default function EditorPage() {
             <div className="product-ref-preview product-ref-preview-inline">
               <img src={project.visual_bible.products[0].referenceImageUrl} alt="제품 레퍼런스 이미지"
                 className="product-ref-thumb" />
+              <span className="product-ref-check" aria-hidden="true">✓</span>
               <span className="product-ref-label">PRODUCT REFERENCE</span>
               <label className="btn-text product-ref-replace-btn">
                 교체

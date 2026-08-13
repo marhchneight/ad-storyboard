@@ -90,7 +90,7 @@ export default function DirectorsRoom({ treatment, context, busy, onSelect, onSk
                     <p>{opt.brandFitReason}</p>
                   </div>
                 )}
-                <button type="button" className="btn-primary btn-block" disabled={busy}
+                <button type="button" className="btn-accent btn-block" disabled={busy}
                   onClick={() => onSelect(opt, creativeRisk)}>
                   {busy ? '연출 중...' : '이 방향으로 만들기'}
                 </button>

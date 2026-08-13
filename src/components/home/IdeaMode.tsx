@@ -194,7 +194,7 @@ export default function IdeaMode({
       {busy ? (
         <p className="director-loading">{loadingMessage}...</p>
       ) : (
-        <button type="submit" className="btn-primary btn-block" disabled={!idea.trim() || copyStatus === 'reading'}>
+        <button type="submit" className="btn-accent btn-block" disabled={!idea.trim() || copyStatus === 'reading'}>
           콘티 만들기 →
         </button>
       )}

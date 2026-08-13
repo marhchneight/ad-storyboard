@@ -54,7 +54,7 @@ export default function CreativeDirectionPanel({ treatment, busy, onEnterDirecto
       )}
 
       <div className="cd-actions">
-        <button type="button" className="btn-primary btn-block" onClick={onEnterDirectorsRoom} disabled={busy}>
+        <button type="button" className="btn-accent btn-block" onClick={onEnterDirectorsRoom} disabled={busy}>
           {busy ? '연출 방향을 준비하는 중...' : '연출 방향 정하기 →'}
         </button>
         <button type="button" className="btn-secondary" onClick={onTryAnother} disabled={busy}>

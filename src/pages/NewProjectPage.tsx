@@ -212,7 +212,7 @@ export default function NewProjectPage() {
         {submitting && !manualMode ? (
           <p className="director-loading">{loadingMessage}...</p>
         ) : (
-          <button type="submit" className="btn-primary btn-block" disabled={submitting}>
+          <button type="submit" className="btn-accent btn-block" disabled={submitting}>
             {submitting ? '만드는 중...' : manualMode ? '만들기' : 'Direct My Storyboard'}
           </button>
         )}

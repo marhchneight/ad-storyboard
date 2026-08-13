@@ -114,7 +114,7 @@ export default function ProductMode({
         {styleField}
         {aspectRatioField}
         {storyboardLengthField}
-        <button type="submit" className="btn-secondary btn-block" disabled={suggesting || busy || !product.trim()}>
+        <button type="submit" className="btn-accent btn-block" disabled={suggesting || busy || !product.trim()}>
           {suggestLabel}
         </button>
       </form>

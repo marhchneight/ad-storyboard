@@ -601,8 +601,10 @@ a.btn-primary {
   width: 100%;
 }
 
-/* The one AI/generation primary CTA — see EditorPage's "전체 이미지 생성"
-   button. Not a general-purpose variant; other buttons stay neutral. */
+/* The single primary AI/generation CTA per screen (e.g. EditorPage's "전체
+   이미지 생성", or the one "다음 단계" action in each storyboard-creation
+   step) — never more than one per screen, and never a general-purpose
+   variant for utility buttons (export/download/delete stay neutral). */
 .btn-accent,
 a.btn-accent {
   display: inline-flex;
@@ -862,7 +864,7 @@ a.btn-accent {
 .director-loading {
   text-align: center;
   font-style: italic;
-  color: var(--text-secondary);
+  color: var(--accent);
   padding: 12px 0;
 }
 
@@ -1163,8 +1165,15 @@ a.btn-accent {
   margin: 12px 0;
 }
 
+.dna-mode-tabs .btn-text {
+  border-bottom: 2px solid transparent;
+  padding-bottom: 4px;
+  text-decoration: none;
+}
+
 .dna-mode-active {
   color: var(--text);
+  border-bottom-color: var(--accent);
 }
 
 .dna-result {
@@ -1242,7 +1251,7 @@ a.btn-accent {
 .dna-apply-status-title {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text);
+  color: var(--accent);
 }
 
 .dna-apply-status p {
@@ -1462,7 +1471,7 @@ a.btn-accent {
 .idea-examples-status {
   font-size: 0.78rem;
   font-style: italic;
-  color: var(--text-secondary);
+  color: var(--accent);
   margin: 8px 0 0;
 }
 
@@ -1509,7 +1518,7 @@ a.btn-accent {
 
 .start-mode-tab-active {
   color: var(--text);
-  border-bottom-color: var(--ink);
+  border-bottom-color: var(--accent);
 }
 
 .style-field {
@@ -1542,9 +1551,9 @@ a.btn-accent {
 }
 
 .aspect-ratio-btn-active {
-  background-color: var(--ink);
-  color: var(--ink-on);
-  border-color: var(--ink);
+  background-color: var(--accent-soft);
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 .start-mode-panel {
@@ -1574,7 +1583,8 @@ a.btn-accent {
 }
 
 .concept-card:hover:not(:disabled) {
-  border-color: var(--ink);
+  border-color: var(--accent);
+  background-color: var(--accent-soft);
 }
 
 .concept-card-index {
@@ -1764,6 +1774,11 @@ a.btn-accent {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 20px;
+  transition: border-color 160ms ease;
+}
+
+.director-card:hover {
+  border-color: var(--accent-border);
 }
 
 .director-card h3 {
@@ -1950,6 +1965,11 @@ a.btn-accent {
 .product-ref-preview-inline {
   margin-top: 12px;
   display: inline-flex;
+}
+
+.product-ref-check {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .product-ref-label {
