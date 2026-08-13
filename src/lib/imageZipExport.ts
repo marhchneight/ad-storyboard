@@ -1,19 +1,11 @@
 import JSZip from 'jszip';
 import type { Cut, Project } from '../types';
+import { detectImageMime } from './imageMime';
 
 const FILENAME_UNSAFE = /[\\/:*?"<>|]/g;
 
 function sanitizeFilename(name: string): string {
   return name.replace(FILENAME_UNSAFE, '_').trim();
-}
-
-function extensionFromImage(blob: Blob, url: string): string {
-  if (blob.type === 'image/png') return 'png';
-  if (blob.type === 'image/jpeg') return 'jpg';
-  if (blob.type === 'image/webp') return 'webp';
-  const match = /\.(png|jpe?g|webp)(?:\?|$)/i.exec(url);
-  if (match) return match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase();
-  return 'png';
 }
 
 export interface ImagesZipResult {
@@ -47,8 +39,8 @@ export async function buildImagesZip(
       const res = await fetch(cut.image_url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
-      const ext = extensionFromImage(blob, cut.image_url);
-      zip.file(`${String(sceneNumber).padStart(padWidth, '0')}.${ext}`, await blob.arrayBuffer());
+      const { extension } = detectImageMime(blob, cut.image_url);
+      zip.file(`${String(sceneNumber).padStart(padWidth, '0')}.${extension}`, await blob.arrayBuffer());
     } catch (err) {
       console.warn(`Failed to fetch image for cut ${sceneNumber}:`, err);
       failedSceneNumbers.push(sceneNumber);

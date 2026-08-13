@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useCuts } from '../hooks/useCuts';
 import SortableCutCard from '../components/SortableCutCard';
 import { buildStoryboardPdf } from '../lib/pdfExport';
+import { buildStoryboardPptx } from '../lib/pptExport';
 import { buildImagesZip, buildImagesZipFilename } from '../lib/imageZipExport';
 import { downloadBlob } from '../lib/download';
 import { scrollToAndHighlightAppliedCuts } from '../lib/dnaHighlight';
@@ -31,6 +32,7 @@ export default function EditorPage() {
   const [overallPrompt, setOverallPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [pptxExporting, setPptxExporting] = useState(false);
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
   const [directing, setDirecting] = useState(false);
@@ -211,6 +213,20 @@ export default function EditorPage() {
     }
   }
 
+  async function handleExportPptx() {
+    if (!project) return;
+    setError(null);
+    setPptxExporting(true);
+    try {
+      const pptx = await buildStoryboardPptx(project, cuts);
+      await pptx.writeFile({ fileName: `${project.title}.pptx` });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPptxExporting(false);
+    }
+  }
+
   async function handleDownloadAllImages() {
     if (!project) return;
     setError(null);
@@ -314,6 +330,9 @@ export default function EditorPage() {
           </button>
           <button type="button" className="btn-primary" onClick={handleExportPdf} disabled={exporting}>
             {exporting ? 'PDF 생성 중...' : 'PDF로 내보내기'}
+          </button>
+          <button type="button" className="btn-secondary" onClick={handleExportPptx} disabled={pptxExporting}>
+            {pptxExporting ? 'PPT 생성 중...' : 'PPT로 내보내기'}
           </button>
           <ThemeToggle />
         </div>

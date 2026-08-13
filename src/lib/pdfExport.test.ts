@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { jsPDF } from 'jspdf';
 import { buildStoryboardPdf } from './pdfExport';
 import type { Project, Cut } from '../types';
 
@@ -15,12 +16,15 @@ function koreanFontArrayBuffer(): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
-const project: Project = {
-  id: 'p1', user_id: 'u1', title: '테스트 프로젝트', style: 'sketch', aspect_ratio: '1:1',
-  overall_prompt: '콘셉트', brief: {}, creative_direction: '', creative_dna: null, creative_treatment: null,
-  selected_directing_direction: null, creative_risk: null,
-  created_at: '', updated_at: '',
-};
+function makeProject(overrides: Partial<Project> = {}): Project {
+  return {
+    id: 'p1', user_id: 'u1', title: '테스트 프로젝트', style: 'sketch', aspect_ratio: '1:1',
+    overall_prompt: '콘셉트', brief: {}, creative_direction: '', creative_dna: null, creative_treatment: null,
+    selected_directing_direction: null, creative_risk: null,
+    created_at: '', updated_at: '',
+    ...overrides,
+  };
+}
 
 const shotDetailDefaults = {
   duration_seconds: null, shot_size: '', lens: '', angle: '', movement: '', composition: '',
@@ -29,14 +33,18 @@ const shotDetailDefaults = {
   applied_creative_dna: [], creative_dna_application_note: '', scene_role: null,
 };
 
-const cuts: Cut[] = [
-  { id: 'c1', project_id: 'p1', order_index: 0, scene_description: '장면1', dialogue: '대사1',
+function makeCut(overrides: Partial<Cut> & { id: string; order_index: number }): Cut {
+  return {
+    project_id: 'p1', scene_description: `장면${overrides.order_index + 1}`, dialogue: `대사${overrides.order_index + 1}`,
     camera_direction: '클로즈업', image_url: null, generation_status: 'idle', created_at: '', updated_at: '',
-    ...shotDetailDefaults },
-  { id: 'c2', project_id: 'p1', order_index: 1, scene_description: '장면2', dialogue: '대사2',
-    camera_direction: '', image_url: null, generation_status: 'idle', created_at: '', updated_at: '',
-    ...shotDetailDefaults },
-];
+    ...shotDetailDefaults,
+    ...overrides,
+  };
+}
+
+function makeCuts(count: number): Cut[] {
+  return Array.from({ length: count }, (_, i) => makeCut({ id: `c${i + 1}`, order_index: i }));
+}
 
 // A tiny valid 1x1 transparent PNG, base64-encoded.
 const TINY_PNG_BASE64 =
@@ -79,61 +87,94 @@ if (typeof globalThis.FileReader === 'undefined') {
 describe('buildStoryboardPdf', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  it('creates one page per cut plus contains the project title', async () => {
-    const doc = await buildStoryboardPdf(project, cuts);
-    expect(doc.getNumberOfPages()).toBe(cuts.length);
-    const text = (doc as unknown as { getTextContent?: unknown }).getTextContent ? '' : ''; // jsPDF has no direct text extraction; check page count and no throw
-    expect(text).toBe('');
+  it('places up to 5 cuts per page (overview layout), not one page per cut', async () => {
+    const doc = await buildStoryboardPdf(makeProject(), makeCuts(3));
+    expect(doc.getNumberOfPages()).toBe(1);
   });
 
-  it('embeds a fetched image into the PDF for cuts that have an image_url', async () => {
+  it('starts a new page once a project has more than 5 cuts (9 cuts -> 2 pages)', async () => {
+    const doc = await buildStoryboardPdf(makeProject(), makeCuts(9));
+    expect(doc.getNumberOfPages()).toBe(2);
+  });
+
+  it('creates exactly ceil(cutCount/5) pages for a larger storyboard', async () => {
+    const doc = await buildStoryboardPdf(makeProject(), makeCuts(12));
+    expect(doc.getNumberOfPages()).toBe(3);
+  });
+
+  it('never throws and still produces a page when there are zero cuts', async () => {
+    const doc = await buildStoryboardPdf(makeProject(), []);
+    expect(doc.getNumberOfPages()).toBe(1);
+  });
+
+  it('embeds a fetched image contain-fit (never the old fixed 200x200 box) into the PDF', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url === '/fonts/Pretendard-Regular.ttf') {
         return { arrayBuffer: async () => koreanFontArrayBuffer() } as unknown as Response;
       }
       expect(url).toBe('https://example.com/cut-1.png');
-      return {
-        blob: async () => tinyPngBlob(),
-      } as unknown as Response;
+      return { ok: true, blob: async () => tinyPngBlob() } as unknown as Response;
     });
     vi.stubGlobal('fetch', fetchMock);
+    const addImageSpy = vi.spyOn(jsPDF.API as unknown as { addImage: (...args: unknown[]) => unknown }, 'addImage');
 
-    const cutsWithImage: Cut[] = [
-      { ...cuts[0], image_url: 'https://example.com/cut-1.png' },
-    ];
-
-    const doc = await buildStoryboardPdf(project, cutsWithImage);
+    const cutsWithImage = [makeCut({ id: 'c1', order_index: 0, image_url: 'https://example.com/cut-1.png' })];
+    const doc = await buildStoryboardPdf(makeProject(), cutsWithImage);
 
     expect(fetchMock).toHaveBeenCalledWith('https://example.com/cut-1.png');
     expect(doc.getNumberOfPages()).toBe(1);
+    expect(addImageSpy).toHaveBeenCalledTimes(1);
 
-    // Inspect the raw PDF bytes to confirm an image XObject was actually
-    // embedded, not just requested.
+    const [, , x, y, w, h] = addImageSpy.mock.calls[0] as unknown as [unknown, unknown, number, number, number, number];
+    // Regression guard: the old implementation always drew a hardcoded 200x200 square,
+    // regardless of the image's real (here 1x1, i.e. square) aspect ratio.
+    expect(w === 200 && h === 200).toBe(false);
+    // The contain-fit rect must stay inside the page (no overflow/crop needed to fit it).
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    expect(x).toBeGreaterThanOrEqual(0);
+    expect(y).toBeGreaterThanOrEqual(0);
+    expect(x + w).toBeLessThanOrEqual(pageWidth + 0.01);
+    expect(y + h).toBeLessThanOrEqual(pageHeight + 0.01);
+
+    // Inspect the raw PDF bytes to confirm an image XObject was actually embedded.
     const pdfString = doc.output('datauristring');
     const rawPdf = atob(pdfString.split(',')[1]);
     expect(rawPdf).toContain('/Image');
     expect(rawPdf).toContain('/XObject');
   });
 
-  it('continues generating the PDF (text-only) when a cut image fetch fails', async () => {
+  it('draws an "이미지 없음" placeholder (never throws) for a cut with no image_url', async () => {
+    const doc = await buildStoryboardPdf(makeProject(), [makeCut({ id: 'c1', order_index: 0, image_url: null })]);
+    expect(doc.getNumberOfPages()).toBe(1);
+  });
+
+  it('continues generating the PDF when a cut image fetch fails, falling back to a placeholder', async () => {
     const fetchMock = vi.fn(async () => {
       throw new Error('network down');
     });
     vi.stubGlobal('fetch', fetchMock);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const mixedCuts: Cut[] = [
-      { ...cuts[0], image_url: 'https://example.com/broken.png' },
-      { ...cuts[1], image_url: null },
+    const mixedCuts = [
+      makeCut({ id: 'c1', order_index: 0, image_url: 'https://example.com/broken.png' }),
+      makeCut({ id: 'c2', order_index: 1, image_url: null }),
     ];
 
-    const doc = await buildStoryboardPdf(project, mixedCuts);
+    const doc = await buildStoryboardPdf(makeProject(), mixedCuts);
 
-    expect(doc.getNumberOfPages()).toBe(2);
+    expect(doc.getNumberOfPages()).toBe(1);
     expect(warnSpy).toHaveBeenCalled();
+  });
 
-    warnSpy.mockRestore();
+  it('uses a landscape page for a 16:9 project and a portrait page for 9:16/1:1', async () => {
+    const landscapeDoc = await buildStoryboardPdf(makeProject({ aspect_ratio: '16:9' }), makeCuts(1));
+    expect(landscapeDoc.internal.pageSize.getWidth()).toBeGreaterThan(landscapeDoc.internal.pageSize.getHeight());
+
+    const portraitDoc = await buildStoryboardPdf(makeProject({ aspect_ratio: '9:16' }), makeCuts(1));
+    expect(portraitDoc.internal.pageSize.getHeight()).toBeGreaterThan(portraitDoc.internal.pageSize.getWidth());
   });
 });
