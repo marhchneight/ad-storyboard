@@ -181,7 +181,10 @@ Deno.serve(async (req) => {
       const projectIdErr = validateUuid(projectId, 'projectId');
       if (projectIdErr) return jsonResponse({ error: projectIdErr }, 400);
     }
-    const imageUrlErr = validateUrl(imageUrl, 'imageUrl', { maxLength: 2048 });
+    // imageUrl carries either a short remote URL OR a base64 data: URL from the "이미지 업로드"
+    // tab (fileToDataUrl in creativeDnaApi.ts) — the latter is routinely hundreds of KB to a few
+    // MB of text for an ordinary photo, so the cap must accommodate that, not just a normal URL.
+    const imageUrlErr = validateUrl(imageUrl, 'imageUrl', { maxLength: 15_000_000 });
     if (imageUrlErr) return jsonResponse({ error: imageUrlErr }, 400);
     const textDescriptionErr = validateString(textDescription, 'textDescription', { maxLength: 10000 });
     if (textDescriptionErr) return jsonResponse({ error: textDescriptionErr }, 400);
