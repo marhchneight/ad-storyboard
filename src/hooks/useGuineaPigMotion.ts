@@ -24,8 +24,6 @@ export interface GuineaPigMotion extends GuineaPigState {
 }
 
 const START_T = 0.15;
-const MAX_POOPS = 8;
-const POOP_CLICK_COOLDOWN_MS = 15000;
 // How far "behind" the guinea pig (opposite its direction of travel) a
 // click-triggered poop lands, in perimeterT units.
 const POOP_BEHIND_OFFSET = 0.035;
@@ -85,7 +83,6 @@ export function useGuineaPigMotion(reducedMotion: boolean): GuineaPigMotion {
   });
   const [poops, setPoops] = useState<Poop[]>([]);
   const walkTicksLeft = useRef(0);
-  const lastPoopClickAt = useRef(-Infinity);
   const poopIdCounter = useRef(0);
   // Kept in sync every render so triggerPoop (a click handler, not part of
   // the tick loop) can read the current position without a stale closure.
@@ -93,20 +90,18 @@ export function useGuineaPigMotion(reducedMotion: boolean): GuineaPigMotion {
   stateRef.current = state;
 
   const triggerPoop = useCallback(() => {
-    const now = performance.now();
-    if (now - lastPoopClickAt.current < POOP_CLICK_COOLDOWN_MS) return;
-    lastPoopClickAt.current = now;
-
+    // No cooldown — click as fast as you want, they pile up.
     const { perimeterT, direction } = stateRef.current;
-    const behindT = normalizeT(perimeterT - direction * POOP_BEHIND_OFFSET);
+    // Small jitter per click so rapid-fire clicks fan out into a little pile
+    // instead of stacking exactly on top of each other.
+    const jitter = rand(-0.018, 0.018);
+    const behindT = normalizeT(perimeterT - direction * POOP_BEHIND_OFFSET + jitter);
     const edge = Math.floor(behindT) as Edge;
     const along = behindT - edge;
     poopIdCounter.current += 1;
 
-    setPoops((prev) => {
-      const next = [...prev, { id: poopIdCounter.current, edge, along }];
-      return next.length > MAX_POOPS ? next.slice(next.length - MAX_POOPS) : next;
-    });
+    // Truly unlimited — no FIFO cap, pile up as many as you click.
+    setPoops((prev) => [...prev, { id: poopIdCounter.current, edge, along }]);
   }, []);
 
   useEffect(() => {
