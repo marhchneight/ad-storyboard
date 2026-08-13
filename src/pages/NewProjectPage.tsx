@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createProject, directStoryboard } from '../hooks/useProjects';
 import ThemeToggle from '../components/ThemeToggle';
+import ProductReferenceUpload from '../components/home/ProductReferenceUpload';
+import type { ProductReferenceUploadResult } from '../lib/productReferenceApi';
 import type { CreativeBrief, Duration, Platform, StoryboardStyle } from '../types';
 
 const DIRECTOR_LOADING_MESSAGES = [
@@ -30,6 +32,7 @@ export default function NewProjectPage() {
   const [visualKeywords, setVisualKeywords] = useState('');
   const [reference, setReference] = useState('');
   const [showDetails, setShowDetails] = useState(false);
+  const [productReference, setProductReference] = useState<ProductReferenceUploadResult | null>(null);
 
   const [manualMode, setManualMode] = useState(false);
   const [cutCount, setCutCount] = useState(4);
@@ -67,6 +70,7 @@ export default function NewProjectPage() {
         visualKeywords: visualKeywords.trim() || undefined,
         reference: reference.trim() || undefined,
         conceptDescription: freeformIdea.trim() || undefined,
+        productReferenceImageUrl: productReference?.url,
       };
       const projectTitle = title.trim() || product.trim() || '새 광고 스토리보드';
       const projectId = await directStoryboard({ title: projectTitle, style, brief, freeformIdea });
@@ -132,6 +136,8 @@ export default function NewProjectPage() {
                 placeholder="예: 20대 여성을 타깃으로 한 향수 광고. 새벽 서울의 차갑고 몽환적인 분위기. 15초 인스타그램 릴스."
                 required={!showDetails} />
             </div>
+
+            <ProductReferenceUpload value={productReference} onChange={setProductReference} disabled={submitting} />
 
             <button type="button" className="btn-text" onClick={() => setShowDetails((v) => !v)}>
               {showDetails ? '세부 브리프 숨기기' : '+ 세부 브리프 항목 펼치기 (선택)'}

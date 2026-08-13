@@ -1893,6 +1893,71 @@ a.btn-accent {
   white-space: nowrap;
 }
 
+.product-ref-desc {
+  font-size: 0.85rem;
+  margin-bottom: 10px;
+}
+
+.product-ref-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px dashed var(--accent-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.product-ref-dropzone-active {
+  border-color: var(--accent);
+  background-color: var(--accent-soft);
+}
+
+.product-ref-choose-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.product-ref-dropzone-hint {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.product-ref-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.product-ref-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.product-ref-replace-btn {
+  cursor: pointer;
+}
+
+.product-ref-preview-inline {
+  margin-top: 12px;
+  display: inline-flex;
+}
+
+.product-ref-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+
 /* Storyboard length (scene count / duration) */
 
 .scene-length-sub {

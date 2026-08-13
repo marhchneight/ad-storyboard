@@ -30,6 +30,8 @@ export interface CreativeBrief {
   conceptDescription?: string;
   /** Brand Intelligence context from the "제품" tab, carried through so storyboard generation keeps the same brand understanding. */
   brandContext?: BrandAnalysis;
+  /** Public URL of a user-uploaded real product photo (see upload-product-reference), used as a visual-consistency reference for storyboard/image generation. */
+  productReferenceImageUrl?: string;
 }
 
 export interface CreativeDnaScore {
@@ -187,6 +189,8 @@ export interface Project {
   /** The Director's Room direction the user picked, if they went through it — null when skipped or on older projects. */
   selected_directing_direction: DirectingOption | null;
   creative_risk: CreativeRisk | null;
+  /** Persistent character/product/location entity definitions, populated by ai-director at creation and enriched (referenceImageUrl) by generate-image / a user-uploaded product photo. Null on projects created via the legacy manual-cut-count flow. */
+  visual_bible: VisualBible | null;
   created_at: string;
   updated_at: string;
 }
@@ -196,6 +200,41 @@ export interface CutEntityRefs {
   characters: string[];
   products: string[];
   location: string | null;
+}
+
+/** A persistent character/product/location entity definition inside Project.visual_bible. Only the fields the frontend actually reads are declared — the AI-facing shapes (ai-director/generate-image) carry additional descriptive fields not needed here. */
+export interface VisualBibleProductEntity {
+  id: string;
+  label: string;
+  type?: string;
+  shape?: string;
+  color?: string;
+  material?: string;
+  packaging?: string;
+  labelDetails?: string;
+  relativeSize?: string;
+  distinctiveDetails?: string;
+  /** Set once a reference image (user-uploaded or auto-locked from the first generated cut) exists for this entity. */
+  referenceImageUrl?: string | null;
+}
+
+export interface VisualBibleCharacterEntity {
+  id: string;
+  label: string;
+  referenceImageUrl?: string | null;
+}
+
+export interface VisualBibleLocationEntity {
+  id: string;
+  label: string;
+  referenceImageUrl?: string | null;
+}
+
+export interface VisualBible {
+  globalStyle: string;
+  characters: VisualBibleCharacterEntity[];
+  products: VisualBibleProductEntity[];
+  locations: VisualBibleLocationEntity[];
 }
 
 export interface Cut {

@@ -1,5 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { validateString, validateNumber, validateEnum } from '../_shared/validation.ts';
+import { validateString, validateNumber, validateEnum, validateUrl } from '../_shared/validation.ts';
 import { sanitizeUpstreamError, sanitizeUnexpectedError } from '../_shared/errors.ts';
 import { checkRateLimit } from '../_shared/rateLimit.ts';
 import { logAiUsage } from '../_shared/usageLog.ts';
@@ -17,7 +17,10 @@ const ENTITY_INSTRUCTIONS =
   '장소가 필요한 경우에만 새 id를 만드세요. 등장하지 않는 entity는 만들지 마세요. ' +
   'IMPORTANT: even though this instruction is in Korean, every field you write inside "visualBible" itself ' +
   '(labels, descriptions, all attributes) must be written in English — these are internal, model-facing ' +
-  'definitions, not shown to the end user.';
+  'definitions, not shown to the end user. 브리프에 실제 제품 사진이 이미 준비되어 있다고 안내된 경우, 그 ' +
+  '제품이 시각적으로 명확히 등장해야 하는 샷(예: 제품 단독 샷, 제품 클로즈업, 사용 장면, 엔드카드/CTA 샷)에는 ' +
+  '반드시 해당 product entity id를 "productIds"에 포함하세요. 다만 모든 샷에 억지로 넣지 말고, 그 장면에 실제로 ' +
+  '제품이 보이는 경우에만 포함하세요.';
 
 const LANGUAGE_POLICY =
   'Language policy: "concept", "creativeDirection", and every shot field except "imagePrompt" — "visual", ' +
@@ -144,6 +147,7 @@ interface ProductEntity {
   labelDetails: string;
   relativeSize: string;
   distinctiveDetails: string;
+  referenceImageUrl?: string | null;
 }
 
 interface LocationEntity {
@@ -383,6 +387,23 @@ function buildBrandContextSummary(brandContext: Record<string, unknown>): string
     : '';
 }
 
+// When the user uploaded a real product photo (see upload-product-reference), tell the model not
+// to invent this product's packaging/color/logo — the real photo overrides visualBible's
+// invented attributes at image-generation time (see generate-image's reference-image handling).
+function buildProductReferenceNote(brief: Record<string, unknown>): string {
+  const url = brief.productReferenceImageUrl;
+  if (typeof url !== 'string' || !url.trim()) return '';
+  return '\n\nIMPORTANT: A real photo of the actual product (packaging/appearance) has already been ' +
+    'uploaded by the user and will be attached to relevant shots automatically after generation. Do NOT ' +
+    'invent this product\'s packaging design, color, logo, or label text in "visualBible.products" — for ' +
+    'the product this brief describes, leave "packaging", "color", "labelDetails" etc. as brief, neutral ' +
+    'placeholders (e.g. "as shown in reference photo") rather than inventing specific visual details, since ' +
+    'the real photo will override the model\'s interpretation of those fields for image generation. Still ' +
+    'assign this product a normal entity id in "visualBible.products" and reference it via "productIds" in ' +
+    'shots where the real product should visibly appear (e.g. packshot, product hero, usage, end-card) — ' +
+    'do not force it into every shot.';
+}
+
 const CREATIVE_RISK_GUIDANCE: Record<string, string> = {
   safe:
     'Creative risk tier: SAFE. Prioritize a composition that is reliably shootable and brand-safe by ordinary ' +
@@ -457,9 +478,10 @@ function buildBriefSummary(brief: Record<string, unknown>, freeformIdea: string)
   }
   const summary = lines.length > 0 ? lines.join('\n') : '(브리프 정보 없음 — 자유롭게 해석하세요)';
   const brandContext = brief.brandContext;
-  return (brandContext && typeof brandContext === 'object')
+  const withBrand = (brandContext && typeof brandContext === 'object')
     ? summary + buildBrandContextSummary(brandContext as Record<string, unknown>)
     : summary;
+  return withBrand + buildProductReferenceNote(brief);
 }
 
 interface SceneRole {
@@ -522,6 +544,10 @@ Deno.serve(async (req) => {
     if (creativeRisk !== undefined) {
       const riskErr = validateEnum(creativeRisk, ['safe', 'balanced', 'creative', 'bold'] as const, 'creativeRisk');
       if (riskErr) return jsonResponse({ error: riskErr }, 400);
+    }
+    if (brief && typeof brief === 'object' && (brief as Record<string, unknown>).productReferenceImageUrl !== undefined) {
+      const refUrlErr = validateUrl((brief as Record<string, unknown>).productReferenceImageUrl, 'productReferenceImageUrl');
+      if (refUrlErr) return jsonResponse({ error: refUrlErr }, 400);
     }
 
     const authHeader = req.headers.get('Authorization') ?? '';
@@ -637,6 +663,21 @@ Deno.serve(async (req) => {
       creativeDirectionText = parsed.creativeDirection;
       shots = parsed.shots;
       visualBible = parsed.visualBible;
+    }
+
+    // Seed the user-uploaded product reference photo into the first-defined product entity —
+    // the AI defines entities in brief-reading order, and brief.product is the singular
+    // advertised product, so the first product entity is the reliable match. generate-image's
+    // collectReferenceImageUrls/withLockedReferenceImages are origin-agnostic and already handle
+    // a pre-seeded referenceImageUrl correctly (never overwritten by a later generated image).
+    const productRefUrl = brief && typeof brief === 'object' ? (brief as Record<string, unknown>).productReferenceImageUrl : undefined;
+    if (typeof productRefUrl === 'string' && productRefUrl.trim() && visualBible.products.length > 0) {
+      visualBible = {
+        ...visualBible,
+        products: visualBible.products.map((p, i) =>
+          i === 0 ? { ...p, referenceImageUrl: productRefUrl } : p
+        ),
+      };
     }
 
     const { data: project, error: projectError } = await supabase

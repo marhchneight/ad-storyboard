@@ -6,7 +6,7 @@ import type { Project, Cut } from '../types';
 const project: Project = {
   id: 'p1', user_id: 'u1', title: '사랑의 레시피', style: 'sketch', aspect_ratio: '1:1',
   overall_prompt: '', brief: {}, creative_direction: '', creative_dna: null, creative_treatment: null,
-  selected_directing_direction: null, creative_risk: null,
+  selected_directing_direction: null, creative_risk: null, visual_bible: null,
   created_at: '', updated_at: '',
 };
 

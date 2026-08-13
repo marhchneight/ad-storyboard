@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { analyzeBrand, generateCreativeDirection, suggestConcepts, type SceneCountParams } from '../../lib/creativeDirectionApi';
+import type { ProductReferenceUploadResult } from '../../lib/productReferenceApi';
+import ProductReferenceUpload from './ProductReferenceUpload';
 import type { BrandAnalysis, CreativeBrief, CreativeConcept, CreativeTreatment } from '../../types';
 
 type SuggestStage = 'idle' | 'analyzing' | 'ideating';
@@ -24,6 +26,7 @@ export default function ProductMode({
   const [platform, setPlatform] = useState('');
   const [concepts, setConcepts] = useState<CreativeConcept[] | null>(null);
   const [brandAnalysis, setBrandAnalysis] = useState<BrandAnalysis | null>(null);
+  const [productReference, setProductReference] = useState<ProductReferenceUploadResult | null>(null);
   const [stage, setStage] = useState<SuggestStage>('idle');
   const suggesting = stage !== 'idle';
 
@@ -69,6 +72,7 @@ export default function ProductMode({
         platform: (platform.trim() || undefined) as CreativeBrief['platform'],
         conceptDescription: `${c.title}: ${c.concept}`,
         brandContext: brandAnalysis ?? undefined,
+        productReferenceImageUrl: productReference?.url,
       };
       const freeformIdea = `${c.title}. ${c.concept}`;
       const treatment = await generateCreativeDirection({ freeformIdea, brief, ...sceneCountParams });
@@ -106,6 +110,7 @@ export default function ProductMode({
           <span className="field-label">플랫폼은? (선택)</span>
           <input value={platform} onChange={(e) => setPlatform(e.target.value)} disabled={suggesting || busy} />
         </div>
+        <ProductReferenceUpload value={productReference} onChange={setProductReference} disabled={suggesting || busy} />
         {styleField}
         {aspectRatioField}
         {storyboardLengthField}

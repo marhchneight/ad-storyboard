@@ -24,6 +24,9 @@ import { pickRandomConstraint } from '../lib/creativeRoulette';
 import DirectorControls from '../components/director/DirectorControls';
 import CreativeDnaPanel from '../components/creative-dna/CreativeDnaPanel';
 import ThemeToggle from '../components/ThemeToggle';
+import {
+  deleteProductReference, isAcceptableProductReferenceFile, pathFromProductReferenceUrl, uploadProductReference,
+} from '../lib/productReferenceApi';
 import type { Cut, Project } from '../types';
 
 interface ImageGenerationProgress {
@@ -51,6 +54,8 @@ export default function EditorPage() {
   const [lastChanges, setLastChanges] = useState<string[] | null>(null);
   const [history, setHistory] = useState<Cut[][]>([]);
   const [rouletteConstraint, setRouletteConstraint] = useState<string | null>(null);
+  const [productRefBusy, setProductRefBusy] = useState(false);
+  const [productRefError, setProductRefError] = useState<string | null>(null);
   // Drives the "전체 이미지 생성" progress bar. Non-null for the whole batch run, including a
   // brief completion display (isGenerating: false) before resetting to null — see
   // handleGenerateAll. `completed`/`failed` are real per-cut outcomes, never a fake timer.
@@ -80,6 +85,64 @@ export default function EditorPage() {
   async function saveOverallPrompt() {
     if (!project) return;
     await supabase.from('projects').update({ overall_prompt: overallPrompt }).eq('id', project.id);
+  }
+
+  async function handleProductReferenceFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !project?.visual_bible || project.visual_bible.products.length === 0) return;
+    const clientError = isAcceptableProductReferenceFile(file);
+    if (clientError) {
+      setProductRefError(clientError);
+      return;
+    }
+    setProductRefError(null);
+    setProductRefBusy(true);
+    try {
+      const previousUrl = project.visual_bible.products[0].referenceImageUrl;
+      const result = await uploadProductReference(file);
+      const updatedBible = {
+        ...project.visual_bible,
+        products: project.visual_bible.products.map((p, i) =>
+          i === 0 ? { ...p, referenceImageUrl: result.url } : p
+        ),
+      };
+      const { error: updateError } = await supabase.from('projects').update({ visual_bible: updatedBible }).eq('id', project.id);
+      if (updateError) throw updateError;
+      setProject({ ...project, visual_bible: updatedBible });
+      if (previousUrl) {
+        const previousPath = pathFromProductReferenceUrl(previousUrl);
+        if (previousPath) deleteProductReference(previousPath);
+      }
+    } catch (err) {
+      setProductRefError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProductRefBusy(false);
+    }
+  }
+
+  async function handleRemoveProductReference() {
+    if (!project?.visual_bible || project.visual_bible.products.length === 0) return;
+    const currentUrl = project.visual_bible.products[0].referenceImageUrl;
+    setProductRefError(null);
+    setProductRefBusy(true);
+    try {
+      const updatedBible = {
+        ...project.visual_bible,
+        products: project.visual_bible.products.map((p, i) => i === 0 ? { ...p, referenceImageUrl: null } : p),
+      };
+      const { error: updateError } = await supabase.from('projects').update({ visual_bible: updatedBible }).eq('id', project.id);
+      if (updateError) throw updateError;
+      setProject({ ...project, visual_bible: updatedBible });
+      if (currentUrl) {
+        const currentPath = pathFromProductReferenceUrl(currentUrl);
+        if (currentPath) deleteProductReference(currentPath);
+      }
+    } catch (err) {
+      setProductRefError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProductRefBusy(false);
+    }
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -352,6 +415,20 @@ export default function EditorPage() {
         <div className="card prompt-card director-note">
           <span className="field-label">Creative Direction</span>
           <p>{project.creative_direction}</p>
+          {project.visual_bible?.products?.[0]?.referenceImageUrl && (
+            <div className="product-ref-preview product-ref-preview-inline">
+              <img src={project.visual_bible.products[0].referenceImageUrl} alt="제품 레퍼런스 이미지"
+                className="product-ref-thumb" />
+              <span className="product-ref-label">PRODUCT REFERENCE</span>
+              <label className="btn-text product-ref-replace-btn">
+                교체
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleProductReferenceFile}
+                  disabled={productRefBusy} hidden />
+              </label>
+              <button type="button" className="btn-text" onClick={handleRemoveProductReference} disabled={productRefBusy}>삭제</button>
+            </div>
+          )}
+          {productRefError && <p className="error">{productRefError}</p>}
         </div>
       )}
 

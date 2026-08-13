@@ -7,7 +7,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
   return {
     id: 'p1', user_id: 'u1', title: '테스트 프로젝트', style: 'sketch', aspect_ratio: '1:1',
     overall_prompt: '콘셉트', brief: {}, creative_direction: '', creative_dna: null, creative_treatment: null,
-    selected_directing_direction: null, creative_risk: null,
+    selected_directing_direction: null, creative_risk: null, visual_bible: null,
     created_at: '', updated_at: '',
     ...overrides,
   };
