@@ -122,9 +122,9 @@ export default function NewProjectPage() {
         <div className="field">
           <span className="field-label">스타일</span>
           <select value={style} onChange={(e) => setStyle(e.target.value as StoryboardStyle)}>
+            <option value="live_action">실사형</option>
             <option value="sketch">스케치형</option>
             <option value="animation">애니메이션형</option>
-            <option value="live_action">실사형</option>
           </select>
         </div>
 
