@@ -27,7 +27,6 @@ export default function ProjectListPage() {
           <h1>내 스토리보드</h1>
         </div>
         <div className="page-header-actions">
-          <Link to="/projects/new" className="btn-primary">새 프로젝트</Link>
           <button className="btn-text" onClick={() => signOut()}>로그아웃</button>
           <ThemeToggle />
         </div>

@@ -172,10 +172,6 @@ p {
   max-width: 1200px;
 }
 
-.page-shell-narrow {
-  max-width: 560px;
-}
-
 .page-header {
   display: flex;
   align-items: flex-start;
@@ -196,11 +192,6 @@ p {
 .page-header-actions a {
   white-space: nowrap;
   flex-shrink: 0;
-}
-
-.page-header-actions-standalone {
-  justify-content: flex-end;
-  margin-bottom: 16px;
 }
 
 .storyboard-section-header {
@@ -282,10 +273,6 @@ p {
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 32px;
-}
-
-.form-card {
-  margin-top: 24px;
 }
 
 .prompt-card {
@@ -850,16 +837,6 @@ a.btn-accent {
 }
 
 /* Idea / Director brief */
-
-.idea-subtitle {
-  margin-bottom: 24px;
-}
-
-.brief-details {
-  border-top: 1px solid var(--border);
-  padding-top: 20px;
-  margin: 4px 0 20px;
-}
 
 .director-loading {
   text-align: center;
